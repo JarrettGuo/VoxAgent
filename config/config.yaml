@@ -1,0 +1,24 @@
+# 语音助手配置文件
+
+# 音频设置
+audio:
+  sample_rate: 16000
+  channels: 1
+  chunk_size: 1024
+
+# 唤醒词设置
+wake_word:
+  enabled: true
+  # 支持的唤醒词（中文用拼音表示）
+  keywords:
+    - "ni hao yu yin zhu shou"  # 你好语音助手
+    - "hello assistant"          # hello assistant
+  sensitivity: 0.5  # 灵敏度 0-1，越高越容易唤醒但误触发也越多
+
+# 日志设置
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# 七牛云key
+api_key: "sk-ee25dd68d59b66e45d4ed087ceb6c8e30ab0f08f4294908be20a41da14aded3b"
