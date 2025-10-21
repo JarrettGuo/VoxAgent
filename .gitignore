@@ -1,0 +1,106 @@
+# ----------------------------
+# Python & Environment
+# ----------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.py.class
+
+# Virtual environment
+venv/
+.env/
+.venv/
+env/
+ENV/
+*.env
+
+# Distribution / Packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+*.egg
+MANIFEST
+pip-wheel-metadata/
+
+# ----------------------------
+# IDE / Editor
+# ----------------------------
+# PyCharm
+.idea/
+# VSCode
+.vscode/
+# macOS
+.DS_Store
+# Windows
+Thumbs.db
+
+# ----------------------------
+# Logs & Cache
+# ----------------------------
+*.log
+logs/
+*.bak
+*.swp
+*.tmp
+.cache/
+pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# ----------------------------
+# Application Data
+# ----------------------------
+# 对话历史、缓存的语音或文本中间结果
+data/conversation_history/
+data/tmp/
+data/cache/
+
+# ----------------------------
+# Configs & Secrets
+# ----------------------------
+config/*.local.yaml
+config/*.secret.yaml
+config/*.dev.yaml
+
+# 如果你的 config.yaml 包含敏感信息，可以取消注释下一行：
+# config/config.yaml
+
+# ----------------------------
+# Audio / Model Files
+# ----------------------------
+# 忽略大型或中间生成的音频文件
+*.wav
+*.mp3
+*.flac
+*.m4a
+*.ogg
+
+# 如果你下载了模型权重或TTS/STT资源文件，也应忽略：
+models/
+checkpoints/
+downloads/
+
+# ----------------------------
+# Jupyter / Experiment files
+# ----------------------------
+*.ipynb_checkpoints
+*.ipynb
+
+# ----------------------------
+# System
+# ----------------------------
+# macOS / Linux
+*.~lock*
+*.bak
+*.tmp
+*.temp
+
+# ----------------------------
+# Custom (project-specific)
+# ----------------------------
+# 临时脚本或开发测试文件
+sandbox/
+scripts/tmp_*.py
