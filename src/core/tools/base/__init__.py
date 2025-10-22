@@ -5,14 +5,21 @@
 @Author : guojarrett@gmail.com
 @File   : __init__.py.py
 """
+
 from .schemas import (
     AppControlSchema,
     FileCreateSchema,
-    BrowserSearchSchema,
+    DuckDuckGoSearchSchema,
+    WikipediaSearchSchema,
+    GaodeWeatherSchema,
+    Dalle3Schema,
 )
 
 __all__ = [
     "AppControlSchema",
     "FileCreateSchema",
-    "BrowserSearchSchema",
+    "DuckDuckGoSearchSchema",
+    "WikipediaSearchSchema",
+    "GaodeWeatherSchema",
+    "Dalle3Schema",
 ]

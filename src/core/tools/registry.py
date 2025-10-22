@@ -11,7 +11,11 @@ from typing import Dict, List
 from langchain_core.tools import BaseTool
 
 from src.core.tools.file import file_create
+from src.core.tools.image import dalle3
+from src.core.tools.search import duckduckgo_search, wikipedia_search
 from src.core.tools.system import app_control
+from src.core.tools.weather import gaode_weather
+from src.utils.config import config
 from src.utils.logger import logger
 
 
@@ -30,6 +34,31 @@ class ToolRegistry:
 
         # 文件工具
         self.register("file_create", file_create())
+
+        # 搜索工具
+        try:
+            self.register("duckduckgo_search", duckduckgo_search())
+        except Exception as e:
+            logger.warning(f"DuckDuckGo registration failed: {e}")
+
+        try:
+            self.register("wikipedia_search", wikipedia_search())
+        except Exception as e:
+            logger.warning(f"Wikipedia registration failed: {e}")
+
+        # 天气工具
+        try:
+            api_key = config.get("gaode_weather.api_key")
+            self.register("gaode_weather", gaode_weather(api_key=api_key))
+        except Exception as e:
+            logger.warning(f"Gaode Weather registration failed: {e}")
+
+        # 图像工具
+        try:
+            api_key = config.get("openai.api_key")
+            self.register("dalle3", dalle3(api_key=api_key))
+        except Exception as e:
+            logger.warning(f"DALL·E 3 registration failed: {e}")
 
     def register(self, name: str, tool: BaseTool):
         """注册工具"""
@@ -55,11 +84,16 @@ class ToolRegistry:
 
     def get_tools_by_category(self, category: str) -> List[BaseTool]:
         """根据类别获取工具"""
-        # TODO: 实现更复杂的分类逻辑
-        return [
-            tool for name, tool in self._tools.items()
-            if category in name
-        ]
+        category_map = {
+            "system": ["app_control"],
+            "file": ["file_create"],
+            "search": ["duckduckgo_search", "wikipedia_search"],
+            "weather": ["gaode_weather"],
+            "image": ["dalle3"],
+        }
+
+        tool_names = category_map.get(category, [])
+        return [self._tools[name] for name in tool_names if name in self._tools]
 
 
 # 全局工具注册中心实例

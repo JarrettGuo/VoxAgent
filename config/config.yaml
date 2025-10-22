@@ -41,6 +41,13 @@ asr:
     chunk_length_s: 30
     language: "zh"
 
+# 高德天气配置
+gaode_weather:
+  api_key: "8cb1eee602cd28b29eba5d27c9d4d569"
+
+openai:
+  api_key: "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"
+
 # 七牛云配置
 qiniu:
   api_key: "sk-ee25dd68d59b66e45d4ed087ceb6c8e30ab0f08f4294908be20a41da14aded3b"

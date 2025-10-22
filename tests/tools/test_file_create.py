@@ -263,7 +263,6 @@ class TestFileCreateTool:
         logger.info("测试9: 创建包含特殊字符的文件名")
         logger.info("=" * 60)
 
-        # 注意：某些特殊字符在不同操作系统中可能不被允许
         # 这里只测试常见的安全字符
         special_files = [
             "file-with-dash.txt",

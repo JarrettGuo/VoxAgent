@@ -1,25 +1,28 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-@Time   : 10/21/25
+@Time   : 10/22/25
 @Author : guojarrett@gmail.com
-@File   : __init__.py.py
+@File   : __init__.py
 """
 
 from .file import file_create, FileCreateTool
+from .image import dalle3
 from .registry import tool_registry, ToolRegistry
+from .search import duckduckgo_search, wikipedia_search
 from .system import app_control, AppControlTool
+from .weather import gaode_weather, GaodeWeatherTool
 
 __all__ = [
-    # 注册中心
     "tool_registry",
     "ToolRegistry",
-
-    # 系统工具
     "app_control",
     "AppControlTool",
-
-    # 文件工具
     "file_create",
     "FileCreateTool",
+    "duckduckgo_search",
+    "wikipedia_search",
+    "gaode_weather",
+    "GaodeWeatherTool",
+    "dalle3",
 ]
