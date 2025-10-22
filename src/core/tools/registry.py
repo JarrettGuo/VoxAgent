@@ -5,7 +5,7 @@
 @Author : guojarrett@gmail.com
 @File   : registry.py
 """
-
+import platform
 from typing import Dict, List
 
 from langchain_core.tools import BaseTool
@@ -68,12 +68,39 @@ class ToolRegistry:
         except Exception as e:
             logger.warning(f"DALL·E 3 registration failed: {e}")
 
+        # macOS 专用工具
+        if platform.system() == "Darwin":  # 仅在 macOS 上注册
+            self._register_macos_tools()
+
     def register(self, name: str, tool: BaseTool):
         """注册工具"""
         if name in self._tools:
             logger.warning(f"Tool {name} is already registered. Overwriting.")
 
         self._tools[name] = tool
+
+    def _register_macos_tools(self):
+        """注册 macOS 专用工具"""
+        try:
+            from src.core.tools.system.macos import (
+                mail_search, mail_read, mail_send,
+                music_play, music_control, music_search
+            )
+
+            # 邮件工具
+            self.register("mail_search", mail_search())
+            self.register("mail_read", mail_read())
+            self.register("mail_send", mail_send())
+
+            # 音乐工具
+            self.register("music_play", music_play())
+            self.register("music_control", music_control())
+            self.register("music_search", music_search())
+
+            logger.info("macOS 专用工具注册成功")
+
+        except Exception as e:
+            logger.warning(f"macOS 工具注册失败: {e}")
 
     def get(self, name: str) -> BaseTool:
         """获取工具"""
@@ -94,10 +121,13 @@ class ToolRegistry:
         """根据类别获取工具"""
         category_map = {
             "system": ["app_control"],
-            "file": ["file_create"],
+            "file": ["file_create", "file_read", "file_write", "file_append",
+                     "file_delete", "file_search", "file_list", "file_find_recent"],
             "search": ["duckduckgo_search", "wikipedia_search"],
             "weather": ["gaode_weather"],
             "image": ["dalle3"],
+            "macos_mail": ["mail_search", "mail_read", "mail_send"],
+            "macos_music": ["music_play", "music_control", "music_search"],
         }
 
         tool_names = category_map.get(category, [])

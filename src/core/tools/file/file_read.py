@@ -11,7 +11,7 @@ from typing import Any, Type
 
 from langchain_core.tools import BaseTool
 
-from src.core.tools.base.schemas import FileReadSchema
+from src.core.tools.base.file_operations_schemas import FileReadSchema
 from src.utils.logger import logger
 
 

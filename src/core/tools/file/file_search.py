@@ -12,7 +12,7 @@ from typing import Any, Type, List, Dict
 
 from langchain_core.tools import BaseTool
 
-from src.core.tools.base.schemas import FileSearchSchema
+from src.core.tools.base.file_operations_schemas import FileSearchSchema
 from src.utils.logger import logger
 
 
