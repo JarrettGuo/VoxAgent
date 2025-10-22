@@ -9,7 +9,7 @@ audio:
 
 wake_word:
   enabled: true
-  access_key: "dW07kP/0JEak6UJdk/r8j0UmKoUxb4WCR8eSjIzN1PhYWJqHYrAkQw=="
+  access_key: "gOosExy5KqMFZ0VGQK0IH9RnrrOUoHaL+3cmLR2oDyYzqUFZTdMb2A=="
   keywords:
     - "computer"
     - "jarvis"
@@ -28,7 +28,7 @@ langsmith:
   enabled: true
   tracing: true
   endpoint: "https://api.smith.langchain.com"
-  api_key: "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"
+  api_key: "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"
   project: "voxagent-project"
 
 # ASR 配置
@@ -36,7 +36,7 @@ asr:
   provider: "whisper"
   whisper:
     model: "openai/whisper-small"
-    device: null
+    device: "cuda"
     batch_size: 8
     chunk_length_s: 30
     language: "zh"

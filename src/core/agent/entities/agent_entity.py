@@ -5,8 +5,9 @@
 @Author : guojarrett@gmail.com
 @File   : agent_entity.py
 """
-
-from typing import List, Optional, Dict, Any
+import operator
+from enum import Enum
+from typing import List, Optional, Dict, Any, TypedDict, Annotated
 from uuid import UUID
 
 from langchain_core.messages import AnyMessage
@@ -42,3 +43,26 @@ class AgentState(MessagesState):
     final_output: Optional[str]  # 最终输出
     history: List[AnyMessage]  # 短期记忆历史
     metadata: Dict[str, Any]  # 额外元数据
+
+class ExecutionStatus(Enum):
+    PENDING = "pending"
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+    BLOCKED = "blocked"
+
+class StepState(TypedDict):
+    step_id: str
+    description: str
+    agent_type: str
+    status: ExecutionStatus
+    result: Any
+    error: str
+
+class ExecutionState(TypedDict):
+    plan: Dict[str, Any]
+    current_step_index: int
+    steps: List[StepState]
+    execution_results: Annotated[List[Dict], operator.add]
+    completed: bool
+    error_message: str
