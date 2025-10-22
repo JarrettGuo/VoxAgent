@@ -9,6 +9,8 @@
 import sys
 from pathlib import Path
 
+from src.utils.langsmith_setup import setup_langsmith
+
 # 添加项目根目录到路径
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -22,6 +24,7 @@ def test_text_to_plan_flow():
     测试: 文本 → PlannerAgent → 计划
     (跳过录音和 ASR,直接测试规划部分)
     """
+    setup_langsmith()
     logger.info("=" * 60)
     logger.info("🧪 测试文本到计划的完整流程")
     logger.info("=" * 60)

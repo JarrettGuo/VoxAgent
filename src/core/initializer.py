@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 from src.core.audio.recorder import AudioRecorder
 from src.core.audio.wake_word_detector import WakeWordDetector
+from src.utils.langsmith_setup import setup_langsmith
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
 class AssistantInitializer:
     """助手初始化器 - 负责所有模块的初始化"""
 
-    def __init__(self, assistant: VoiceAssistant):
+    def __init__(self, assistant: 'VoiceAssistant'):
         self.assistant = assistant
         self.config = assistant.config
 
@@ -28,6 +29,8 @@ class AssistantInitializer:
         logger.info("=" * 60)
         logger.info("🤖 VoxAgent Voice Assistant is starting...")
         logger.info("=" * 60)
+
+        self._init_langsmith()
 
         # 检查配置
         if not self._check_config():
@@ -52,6 +55,13 @@ class AssistantInitializer:
 
         logger.info("✅ All modules initialized successfully")
         return True
+
+    def _init_langsmith(self) -> None:
+        """初始化 LangSmith 监控"""
+        try:
+            setup_langsmith()
+        except Exception as e:
+            logger.warning(f"LangSmith initialization failed (non-critical): {e}")
 
     def _check_config(self) -> bool:
         """检查配置是否有效"""

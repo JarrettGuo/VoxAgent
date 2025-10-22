@@ -16,7 +16,6 @@ wake_word:
   sensitivities:
     - 0.5
     - 0.5
-  # 唤醒后静音超时 (秒)
   silence_duration: 3.0
 
 # 日志设置
@@ -24,41 +23,34 @@ logging:
   level: DEBUG
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
+# LangSmith 监控配置
+langsmith:
+  enabled: true
+  tracing: true
+  endpoint: "https://api.smith.langchain.com"
+  api_key: "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"
+  project: "voxagent-project"
 
 # ASR 配置
 asr:
-  provider: "whisper"  # 可选: "whisper" (本地) 或 "qiniu" (云端)
-
-  # 本地 Whisper 配置
+  provider: "whisper"
   whisper:
-    # 模型选择 (按大小和速度):
-    # - "openai/whisper-tiny" (39M, 最快, 准确度最低)
-    # - "openai/whisper-base" (244M, 快速)
-    # - "openai/whisper-small" (967M, 推荐, 平衡)
-    # - "openai/whisper-medium" (3.1GB, 较慢, 高准确度)
-    # - "openai/whisper-large-v3" (6.2GB, 最准确, 最慢)
     model: "openai/whisper-small"
-    device: null  # null=自动检测, "cuda", "cpu"
+    device: null
     batch_size: 8
     chunk_length_s: 30
-    language: "zh"  # 指定语言可提升准确度和速度
+    language: "zh"
 
 # 七牛云配置
 qiniu:
   api_key: "sk-ee25dd68d59b66e45d4ed087ceb6c8e30ab0f08f4294908be20a41da14aded3b"
   base_url: "https://openai.qiniu.com/v1"
-
-  # ASR 配置
   asr:
     model: "asr"
-    format: "wav"  # 录音格式
-
-  # TTS 配置
+    format: "wav"
   tts:
     model: "tts-1"
     voice: "alloy"
-
-  # LLM 配置
   llm:
     model: "gpt-oss-120b"
     temperature: 0.7
@@ -66,23 +58,19 @@ qiniu:
 
 # 录音设置
 recording:
-  # 动态录音配置
   dynamic:
-    min_duration: 2.0  # 最小录音时长(秒)，不足则丢弃
-    max_duration: 60.0  # 最大录音时长(秒)
-    silence_threshold: 500.0  # 静音阈值(RMS值)，可根据环境噪音调整
-    silence_duration: 3.0  # 连续静音多久后停止(秒)
-    speech_threshold: 800.0  # 语音阈值(RMS值)，高于此值才算有效语音
-    min_speech_chunks: 5  # 最少需要的语音帧数
-
-  # 音频参数
+    min_duration: 2.0
+    max_duration: 60.0
+    silence_threshold: 500.0
+    silence_duration: 3.0
+    speech_threshold: 800.0
+    min_speech_chunks: 5
   sample_rate: 16000
   channels: 1
   chunk_size: 1024
 
 # Agent 配置
 agent:
-  # Planner Agent 配置
   planner:
-    max_iterations: 5  # 最大迭代次数
-    enable_memory: false  # 是否启用记忆(暂时关闭)
+    max_iterations: 5
+    enable_memory: false
