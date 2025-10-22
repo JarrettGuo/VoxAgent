@@ -10,7 +10,8 @@ from typing import Dict, List
 
 from langchain_core.tools import BaseTool
 
-from src.core.tools.file import file_create
+from src.core.tools.file import file_create, file_read, file_search, file_list, file_find_recent, file_delete, \
+    file_append, file_write
 from src.core.tools.image import dalle3
 from src.core.tools.search import duckduckgo_search, wikipedia_search
 from src.core.tools.system import app_control
@@ -34,6 +35,13 @@ class ToolRegistry:
 
         # 文件工具
         self.register("file_create", file_create())
+        self.register("file_read", file_read())
+        self.register("file_write", file_write())
+        self.register("file_append", file_append())
+        self.register("file_delete", file_delete())
+        self.register("file_search", file_search())
+        self.register("file_list", file_list())
+        self.register("file_find_recent", file_find_recent())
 
         # 搜索工具
         try:
