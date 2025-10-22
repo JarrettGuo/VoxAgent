@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 class AssistantInitializer:
     """助手初始化器 - 负责所有模块的初始化"""
 
-    def __init__(self, assistant: 'VoiceAssistant'):
+    def __init__(self, assistant: VoiceAssistant):
         self.assistant = assistant
         self.config = assistant.config
 
@@ -73,6 +73,7 @@ class AssistantInitializer:
             if not api_key:
                 logger.error("❌ Please configure Qiniu API Key first")
                 return False
+        # todo 后续的其他配置检查也要放这里
 
         return True
 

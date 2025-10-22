@@ -5,10 +5,16 @@
 @Author : guojarrett@gmail.com
 @File   : processor.py
 """
-
+import io
 import time
-from typing import TYPE_CHECKING
+import wave
+from typing import TYPE_CHECKING, Dict, Any
 
+import numpy as np
+from langchain_openai import ChatOpenAI
+
+from src.core.agent.agents.planner_agent import PlannerAgent
+from src.core.agent.entities.agent_entity import AgentConfig
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
@@ -21,6 +27,7 @@ class CommandProcessor:
     def __init__(self, assistant: 'VoiceAssistant'):
         self.assistant = assistant
         self.config = assistant.config
+        self.planner_agent = None  # PlannerAgent 实例（延迟初始化）
 
     def process_command(self):
         """处理用户指令的主流程"""
@@ -47,14 +54,14 @@ class CommandProcessor:
 
             logger.info(f"📝 Recognized text: {text}")
 
-            # 3. 理解意图并规划任务
-            plan = self._understand_and_plan(text)
+            # 3. 理解意图并规划任务（使用 PlannerAgent）
+            plan_result = self._understand_and_plan(text)
 
-            # 4. 执行任务
-            result = self._execute_plan(plan)
+            # 4. 执行任务计划
+            execution_result = self._execute_plan(plan_result)
 
             # 5. 语音反馈
-            self._text_to_speech(result)
+            self._text_to_speech(execution_result)
 
             logger.info("✅ Processing completed")
 
@@ -112,100 +119,178 @@ class CommandProcessor:
                 audio_format="wav",
                 language=self.assistant.asr_language
             )
-        else:
-            # 七牛云 (需要 URL,这里会失败)
-            logger.error("❌ Qiniu ASR requires URL, not supported for realtime")
-            return ""
+            return result.get("text", "").strip()
 
-        text = result.get("text", "").strip()
+        elif self.assistant.asr_provider == "qiniu":
+            # 七牛云 ASR
+            result = self.assistant.asr_client.transcribe(audio_data)
+            return result.get("text", "").strip()
 
-        if not text:
-            logger.warning("⚠️  No speech detected or recognized")
-            return ""
+        return ""
 
-        # 过滤 Whisper 的常见幻觉输出
-        if self._is_hallucination(text):
-            logger.warning(f"⚠️  Detected hallucination output: '{text}', ignoring")
-            return ""
-
-        return text
-
-    def _has_valid_speech(self, audio_data: bytes, threshold: float = 100.0) -> bool:
-        """检查音频是否包含有效语音(基于RMS能量)"""
-        import numpy as np
-        import wave
-        import io
+    def _has_valid_speech(self, audio_data: bytes) -> bool:
+        """检查音频是否包含有效语音"""
 
         try:
-            # 读取 WAV 数据
-            with wave.open(io.BytesIO(audio_data), 'rb') as wf:
-                frames = wf.readframes(wf.getnframes())
+            # 将 bytes 转换为音频数组
+            with wave.open(io.BytesIO(audio_data), 'rb') as wav_file:
+                frames = wav_file.readframes(wav_file.getnframes())
                 audio_array = np.frombuffer(frames, dtype=np.int16)
 
-            # 计算整体 RMS
-            rms = np.sqrt(np.mean(audio_array.astype(np.float64) ** 2))
+            # 计算能量
+            energy = np.sqrt(np.mean(audio_array.astype(float) ** 2))
 
-            logger.debug(f"   Audio RMS: {rms:.1f}, threshold: {threshold}")
+            # 能量阈值
+            energy_threshold = 100.0
 
-            return rms > threshold
+            return energy > energy_threshold
 
         except Exception as e:
-            logger.warning(f"⚠️  Error checking audio energy: {e}")
-            return True  # 出错时允许继续识别
-
-    @classmethod
-    def _is_hallucination(cls, text: str) -> bool:
-        """检测是否为 Whisper 的幻觉输出"""
-        # 常见的 Whisper 幻觉模式
-        hallucination_patterns = [
-            "字幕",
-            "翻译",
-            "谢谢观看",
-            "请不吝点赞",
-            "订阅",
-            "关注",
-            "by",
-            "感谢",
-            "我们下期再见",
-            "拜拜",
-            "索兰娅",
-            "subtitle",
-            "amara",
-            "字幕组",
-            # 可以根据实际情况添加更多
-        ]
-
-        text_lower = text.lower()
-
-        # 检查是否包含幻觉关键词
-        for pattern in hallucination_patterns:
-            if pattern in text_lower:
-                return True
-
-        # 检查长度(真实语音通常不会太短)
-        if len(text.strip()) < 2:
+            logger.warning(f"⚠️ Failed to check audio validity: {e}")
             return True
 
-        return False
+    def _understand_and_plan(self, text: str) -> Dict[str, Any]:
+        """
+        理解意图并生成执行计划（使用 PlannerAgent）
 
-    def _understand_and_plan(self, text: str) -> dict:
-        """理解意图并生成执行计划"""
-        # TODO: 调用 LLM 进行意图理解和任务规划
+        参数:
+            text: 用户的语音识别文本
+
+        返回:
+            包含计划的字典
+        """
         logger.info("🧠 Understanding intent and planning...")
-        logger.info(f"   User said: {text}")
 
-        return {
-            "intent": "unknown",
-            "text": text,
-            "actions": []
-        }
+        # 1. 初始化 PlannerAgent
+        if self.planner_agent is None:
+            self.planner_agent = self._initialize_planner_agent()
 
-    def _execute_plan(self, plan: dict) -> str:
-        """执行任务计划"""
-        # TODO: 调用工具执行任务
+        # todo 如果失败，调用tts模型输出
+        # if self.planner_agent is None:
+
+        # 3. 使用 PlannerAgent 生成计划
+        try:
+            plan_result = self.planner_agent.plan_task(text)
+            logger.info(f"📋 Plan generated: {plan_result.get('plan', {}).get('feasibility', 'unknown')}")
+
+            logger.info("Plan Details:", plan_result.get("plan", {}))
+
+            return plan_result
+
+        except Exception as e:
+            logger.error(f"❌ Planning failed: {e}")
+            return {
+                "success": False,
+                "message": f"规划任务时出错: {str(e)}",
+                "plan": {
+                    "task": text,
+                    "feasibility": "error",
+                    "steps": []
+                }
+            }
+
+    def _initialize_planner_agent(self):
+        """初始化 PlannerAgent"""
+        try:
+            # 获取配置
+            max_iterations = self.config.get("agent.planner.max_iterations", 5)
+
+            # 创建 LLM
+            llm = self._create_llm()
+            if llm is None:
+                logger.warning("⚠️ Failed to create LLM, PlannerAgent disabled")
+                return None
+
+            # 创建配置
+            config = AgentConfig(
+                max_iterations=max_iterations,
+                enable_memory=False,
+            )
+
+            # 创建 PlannerAgent
+            agent = PlannerAgent(
+                name="planner_agent",
+                llm=llm,
+                config=config,
+            )
+
+            logger.info("✅ PlannerAgent initialized successfully")
+            return agent
+
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize PlannerAgent: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def _create_llm(self):
+        """创建 LLM 实例"""
+        try:
+            # 尝试从七牛云配置创建
+            qiniu_config = self.config.get("qiniu")
+            if qiniu_config:
+                llm = ChatOpenAI(
+                    api_key=qiniu_config.get("api_key"),
+                    base_url=qiniu_config.get("base_url"),
+                    model=qiniu_config.get("llm", {}).get("model", "gpt-4o-mini"),
+                    temperature=qiniu_config.get("llm", {}).get("temperature", 0.7),
+                    max_tokens=qiniu_config.get("llm", {}).get("max_tokens", 2000),
+                )
+
+                logger.info("✅ LLM created from Qiniu config")
+                return llm
+
+        except ImportError:
+            logger.warning("⚠️ langchain_openai not installed")
+        except Exception as e:
+            logger.error(f"❌ Failed to create LLM: {e}")
+
+        return None
+
+    def _execute_plan(self, plan_result: Dict[str, Any]) -> str:
+        """
+        执行任务计划
+
+        参数:
+            plan_result: PlannerAgent 返回的计划结果
+
+        返回:
+            执行结果描述
+        """
         logger.info("⚙️  Executing plan...")
-        text = plan.get("text", "")
-        return f"Received your command: {text}"
+
+        # 1. 检查计划是否成功
+        if not plan_result.get("success"):
+            return plan_result.get("message", "规划失败")
+
+        # 2. 获取计划
+        plan = plan_result.get("plan", {})
+
+        # 3. 检查可行性
+        feasibility = plan.get("feasibility", "unknown")
+
+        if feasibility == "invalid_input":
+            # todo 交给tts模型输出
+            return "您的输入似乎不够清晰，请重新表述您的需求。"
+
+        elif feasibility == "infeasible":
+            # todo 交给tts模型输出
+            return "抱歉，这个任务我目前无法完成。我只能执行计算机相关的操作。"
+
+        elif feasibility == "feasible":
+            steps = plan.get("steps", [])
+            if not steps:
+                return "已收到您的指令，但暂时无法执行。"
+
+            # TODO: 实际执行步骤
+            # 这里可以调用工具系统执行具体步骤
+            logger.info(f"📝 Plan has {len(steps)} steps")
+            logger.info("   (Actual execution to be implemented)")
+
+            return f"我已经为您规划了 {len(steps)} 个步骤，但目前还不支持自动执行。"
+
+        else:
+            return "收到您的指令，但无法确定如何执行。"
 
     def _text_to_speech(self, text: str):
         """文字转语音"""

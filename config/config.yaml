@@ -60,9 +60,9 @@ qiniu:
 
   # LLM 配置
   llm:
-    model:
-    temperature:
-    max_tokens:
+    model: "gpt-oss-120b"
+    temperature: 0.7
+    max_tokens: 2000
 
 # 录音设置
 recording:
@@ -79,3 +79,10 @@ recording:
   sample_rate: 16000
   channels: 1
   chunk_size: 1024
+
+# Agent 配置
+agent:
+  # Planner Agent 配置
+  planner:
+    max_iterations: 5  # 最大迭代次数
+    enable_memory: false  # 是否启用记忆(暂时关闭)

@@ -26,10 +26,10 @@ class VoiceAssistant:
         self.asr_client = None
         self.asr_provider = None  # 记录使用的提供商
         self.asr_language = None  # 记录语言设置
-        self.is_processing = False
+        self.is_processing = False  # 是否正在处理指令
         self._initialized = False
 
-        # 初始化器和处理器
+        # 初始化和处理器
         self.initializer = AssistantInitializer(self)
         self.processor = CommandProcessor(self)
 
@@ -46,7 +46,7 @@ class VoiceAssistant:
         return success
 
     def _on_wake_detected(self, keyword_index: int):
-        """唤醒词检测回调"""
+        """唤醒词检测回调，当检测到唤醒词时调用"""
         if self.is_processing:
             logger.warning("⏳ Currently processing, please wait...")
             return

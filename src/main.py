@@ -5,18 +5,6 @@
 @Author : guojarrett@gmail.com
 @File   : main.py
 """
-# !/usr/bin/env python
-# -*- coding: utf-8 -*-
-"""
-VoxAgent 语音助手 - 主入口
-
-使用方法:
-    python src/main.py
-
-@Time   : 10/21/25
-@Author : guojarrett@gmail.com
-@File   : main.py
-"""
 
 import sys
 from pathlib import Path
