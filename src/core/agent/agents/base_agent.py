@@ -22,7 +22,6 @@ from src.core.agent.entities.agent_entity import AgentConfig
 from src.core.agent.entities.queue_entity import AgentResult, AgentThought
 from src.utils.logger import logger
 
-
 class BaseAgent(BaseModel, Runnable):
     """
     基础 Agent 类 - 适配 LangGraph + 队列管理器

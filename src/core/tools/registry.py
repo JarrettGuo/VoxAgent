@@ -62,11 +62,11 @@ class ToolRegistry:
             logger.warning(f"Gaode Weather registration failed: {e}")
 
         # 图像工具
-        try:
-            api_key = config.get("openai.api_key")
-            self.register("dalle3", dalle3(api_key=api_key))
-        except Exception as e:
-            logger.warning(f"DALL·E 3 registration failed: {e}")
+        # try:
+        #     api_key = config.get("openai.api_key")
+        #     self.register("dalle3", dalle3(api_key=api_key))
+        # except Exception as e:
+        #     logger.warning(f"DALL·E 3 registration failed: {e}")
 
         # macOS 专用工具
         if platform.system() == "Darwin":  # 仅在 macOS 上注册
@@ -108,6 +108,9 @@ class ToolRegistry:
             raise ValueError(f"Tool {name} is not registered.")
 
         return self._tools[name]
+
+    def has_tool(self, name:str) -> bool:
+        return name in self._tools
 
     def get_all(self) -> List[BaseTool]:
         """获取所有工具"""

@@ -6,6 +6,7 @@
 @File   : agent_entity.py
 """
 import operator
+import platform
 from enum import Enum
 from typing import List, Optional, Dict, Any, TypedDict, Annotated
 from uuid import UUID
@@ -14,6 +15,9 @@ from langchain_core.messages import AnyMessage
 from langchain_core.tools import BaseTool
 from langgraph.graph import MessagesState
 from pydantic import BaseModel, Field
+
+from src.core.tools import ToolRegistry
+from src.utils.logger import logger
 
 
 class AgentConfig(BaseModel):
@@ -66,3 +70,47 @@ class ExecutionState(TypedDict):
     execution_results: Annotated[List[Dict], operator.add]
     completed: bool
     error_message: str
+
+
+class AgentMetadata:
+    """Agent元数据"""
+
+    def __init__(
+            self,
+            agent_type: str,
+            priority: int = 50,
+            platforms: Optional[List[str]] = None,
+            required_tools: Optional[List[str]] = None,
+            enabled: bool = True
+    ):
+        self.agent_type = agent_type
+        self.priority = priority
+        self.platforms = platforms or []  # 空列表表示所有平台
+        self.required_tools = required_tools or []
+        self.enabled = enabled
+
+    def is_platform_compatible(self) -> bool:
+        if not self.platforms:
+            return True
+
+        current_platform = platform.system()
+        platform_map = {
+            "Darwin": "macos",
+            "Linux": "linux",
+            "Windows": "windows"
+        }
+
+        current = platform_map.get(current_platform, "unknown")
+        return current in self.platforms
+
+    def check_tools_available(self, tool_manager: ToolRegistry) -> bool:
+        if not self.required_tools:
+            return True
+
+        for tool_name in self.required_tools:
+            if not tool_manager.has_tool(tool_name):
+                logger.warning(
+                    f"Agent '{self.agent_type}' requires tool '{tool_name}' which is not available"
+                )
+                return False
+        return True
