@@ -4,21 +4,80 @@
 audio:
   sample_rate: 16000
   channels: 1
-  chunk_size: 1024
+  chunk_size: 512
+  format: paInt16
 
-# 唤醒词设置
 wake_word:
   enabled: true
-  # 支持的唤醒词（中文用拼音表示）
+  access_key: "dW07kP/0JEak6UJdk/r8j0UmKoUxb4WCR8eSjIzN1PhYWJqHYrAkQw=="
   keywords:
-    - "ni hao yu yin zhu shou"  # 你好语音助手
-    - "hello assistant"          # hello assistant
-  sensitivity: 0.5  # 灵敏度 0-1，越高越容易唤醒但误触发也越多
+    - "computer"
+    - "jarvis"
+  sensitivities:
+    - 0.5
+    - 0.5
+  silence_duration: 3.0
 
 # 日志设置
 logging:
-  level: INFO
+  level: DEBUG
   format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
-# 七牛云key
-api_key: "sk-ee25dd68d59b66e45d4ed087ceb6c8e30ab0f08f4294908be20a41da14aded3b"
+# LangSmith 监控配置
+langsmith:
+  enabled: true
+  tracing: true
+  endpoint: "https://api.smith.langchain.com"
+  api_key: "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"
+  project: "voxagent-project"
+
+# ASR 配置
+asr:
+  provider: "whisper"
+  whisper:
+    model: "openai/whisper-small"
+    device: null
+    batch_size: 8
+    chunk_length_s: 30
+    language: "zh"
+
+# 高德天气配置
+gaode_weather:
+  api_key: "8cb1eee602cd28b29eba5d27c9d4d569"
+
+openai:
+  api_key: "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"
+
+# 七牛云配置
+qiniu:
+  api_key: "sk-ee25dd68d59b66e45d4ed087ceb6c8e30ab0f08f4294908be20a41da14aded3b"
+  base_url: "https://openai.qiniu.com/v1"
+  asr:
+    model: "asr"
+    format: "wav"
+  tts:
+    model: "tts-1"
+    voice: "alloy"
+  llm:
+    model: "gpt-oss-120b"
+    temperature: 0.7
+    max_tokens: 2000
+
+# 录音设置
+recording:
+  dynamic:
+    min_duration: 2.0
+    max_duration: 60.0
+    silence_threshold: 500.0
+    silence_duration: 3.0
+    speech_threshold: 800.0
+    min_speech_chunks: 5
+  sample_rate: 16000
+  channels: 1
+  chunk_size: 1024
+
+# Agent 配置
+agent:
+  planner:
+    max_iterations: 5
+    enable_memory: false
