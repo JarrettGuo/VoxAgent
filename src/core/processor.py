@@ -9,16 +9,18 @@
 import io
 import time
 import wave
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Dict, Any
 
 import numpy as np
 from langchain_openai import ChatOpenAI
 
 from src.core.agent.agents.base_agent import BaseAgent
 from src.core.agent.agents.planner_agent import PlannerAgent
+from src.core.agent.agents.summary_agent import SummaryAgent
 from src.core.agent.agents.task_orchestrator import TaskOrchestrator
 from src.core.models import ExecutionPlan
 from src.core.tools import tool_registry
+from src.services.tts_client import tts_client
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
@@ -36,6 +38,8 @@ class CommandProcessor:
         self.agents = None  # Worker Agents 字典
         self.planner = None  # PlannerAgent 实例
         self.orchestrator = None  # TaskOrchestrator 实例
+        self.summary = None  # summary Agent 实例
+        self.tts_client = None  # TTS 客户端实例
 
         self._initialized = False
 
@@ -86,6 +90,19 @@ class CommandProcessor:
             self.orchestrator = TaskOrchestrator(agents=self.agents)
             logger.info("TaskOrchestrator initialized")
 
+            # 创建 Summarizer
+            self.summarizer = SummaryAgent(llm=self.llm)
+            logger.info("SummarizerAgent initialized")
+
+            # 创建 TTS 客户端
+            edge_config = self.config.get("tts.edge", {})
+            self.tts_client = tts_client(
+                voice=edge_config.get("voice", "yunyang"),
+                rate=edge_config.get("rate", "+0%"),
+                volume=edge_config.get("volume", "+0%"),
+                pitch=edge_config.get("pitch", "+0Hz")
+            )
+
             self._initialized = True
             logger.info("System initialized successfully")
             return True
@@ -125,10 +142,15 @@ class CommandProcessor:
             # 4. 执行任务计划（使用 TaskOrchestrator）
             execution_result = self._execute_plan(execution_plan)
 
-            # 5. 语音反馈
-            self._text_to_speech(execution_result)
+            # 5. 总结结果（新增）
+            final_summary = self._generate_final_summary(
+                original_query=text,
+                execution_plan=execution_plan,
+                execution_result=execution_result
+            )
 
-            logger.info("✅ Processing completed")
+            # 6. 语音输出（更新）
+            self._text_to_speech(final_summary)
 
         except Exception as e:
             logger.error(f"❌ Processing failed: {e}")
@@ -304,7 +326,7 @@ class CommandProcessor:
 
         return None
 
-    def _execute_plan(self, execution_plan: ExecutionPlan) -> str:
+    def _execute_plan(self, execution_plan: ExecutionPlan) -> Dict[str, Any]:
         """
         执行任务计划（使用 TaskOrchestrator）
         """
@@ -314,36 +336,44 @@ class CommandProcessor:
         reason = execution_plan.metadata.get("reason", "")
 
         # 1. 处理不可行的情况
-        if feasibility == "invalid_input":
-            return f"抱歉，我无法理解您的输入。{reason}"
-
-        elif feasibility == "infeasible":
-            return f"抱歉，这个任务我目前无法完成。{reason}"
-
-        elif feasibility != "feasible":
-            return f"收到您的指令，但无法确定如何执行。{reason}"
+        if feasibility != "feasible":
+            return {
+                "orchestrator_result": None,
+                "summary": self._handle_infeasible_plan(feasibility, reason)
+            }
 
         # 2. 检查是否有任务
         if not execution_plan.tasks:
-            return "已收到您的指令，但暂时无法生成执行步骤。"
+            return {
+                "orchestrator_result": None,
+                "summary": "已收到您的指令，但暂时无法生成执行步骤。"
+            }
 
         # 3. 使用 TaskOrchestrator 执行计划
         try:
-            # 将 ExecutionPlan 转换为 TaskOrchestrator 需要的格式
             plan_dict = self._convert_plan_to_dict(execution_plan)
-
-            # 使用 orchestrator 执行
             orchestrator_result = self.orchestrator.execute(plan_dict)
 
-            # 根据 orchestrator 的结果生成用户友好的反馈
-            return self._format_orchestrator_result(
-                orchestrator_result,
-                reason=reason
-            )
+            return {
+                "orchestrator_result": orchestrator_result,
+                "summary": None  # 稍后生成
+            }
 
         except Exception as e:
             logger.error(f"❌ Orchestrator execution failed: {e}", exc_info=True)
-            return f"执行过程中出现错误：{str(e)}"
+            return {
+                "orchestrator_result": None,
+                "summary": f"执行过程中出现错误：{str(e)}"
+            }
+
+    def _handle_infeasible_plan(self, feasibility: str, reason: str) -> str:
+        """处理不可行的计划"""
+        if feasibility == "invalid_input":
+            return f"抱歉，我无法理解您的输入。{reason}"
+        elif feasibility == "infeasible":
+            return f"抱歉，这个任务我目前无法完成。{reason}"
+        else:
+            return f"收到您的指令，但无法确定如何执行。{reason}"
 
     def _convert_plan_to_dict(self, execution_plan: ExecutionPlan) -> dict:
         """
@@ -430,7 +460,69 @@ class CommandProcessor:
         return "\n".join(summary_parts)
 
     def _text_to_speech(self, text: str):
-        """文字转语音"""
-        # TODO: 调用 TTS API
+        """文字转语音并播放"""
+        if not text or not text.strip():
+            logger.warning("Empty text for TTS")
+            return
+
         logger.info("🔊 Providing voice feedback...")
         logger.info(f"💬 Response: {text}")
+
+        # 如果 TTS 客户端可用，则播放语音
+        if self.tts_client:
+            try:
+                self.tts_client.speak(text, speed=1.1)
+            except Exception as e:
+                logger.error(f"❌ TTS playback failed: {e}")
+                logger.info("💬 Fallback to text output")
+        else:
+            logger.info("💬 TTS not available, text output only")
+
+    def _generate_final_summary(
+            self,
+            original_query: str,
+            execution_plan: ExecutionPlan,
+            execution_result: Dict[str, Any]
+    ) -> str:
+        """生成最终的用户友好总结"""
+        # 如果已经有预生成的总结（不可行的情况），直接返回
+        if execution_result.get("summary"):
+            return execution_result["summary"]
+
+        # 获取 orchestrator 的执行摘要
+        orchestrator_result = execution_result.get("orchestrator_result")
+        if not orchestrator_result:
+            return "任务执行遇到了问题，请稍后重试。"
+
+        # 初始化检查
+        if not self._initialized:
+            if not self._initialize_system():
+                return self._create_simple_summary(orchestrator_result)
+
+        # 使用 Summarizer Agent 生成总结
+        try:
+            logger.info("📝 Generating user-friendly summary...")
+            summary = self.summarizer.summarize_sync(
+                original_query=original_query,
+                execution_summary=orchestrator_result
+            )
+            return summary
+
+        except Exception as e:
+            logger.error(f"❌ Summary generation failed: {e}", exc_info=True)
+            # 降级方案
+            return self._create_simple_summary(orchestrator_result)
+
+    def _create_simple_summary(self, orchestrator_result: Dict[str, Any]) -> str:
+        """创建简单的总结（降级方案）"""
+        success = orchestrator_result.get("success", False)
+        total_steps = orchestrator_result.get("total_steps", 0)
+        successful_steps = orchestrator_result.get("successful_steps", 0)
+
+        if success:
+            return f"好的，我已经完成了所有{total_steps}个任务。"
+        elif successful_steps == 0:
+            return "抱歉，任务执行失败了。"
+        else:
+            failed = total_steps - successful_steps
+            return f"我完成了{successful_steps}个任务，但还有{failed}个任务未能完成。"

@@ -10,8 +10,9 @@ import platform
 from abc import ABC
 from typing import Optional, Dict, ClassVar, Type, List, Any
 
+from langchain_classic.agents import create_openai_tools_agent, AgentExecutor
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import ToolMessage, HumanMessage
+from langchain_core.messages import HumanMessage, BaseMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable, RunnableConfig
 from langchain_core.tools import BaseTool
@@ -109,11 +110,28 @@ class BaseAgent(Runnable, ABC):
         # 构建 Prompt
         self.prompt = ChatPromptTemplate.from_messages([
             ("system", self.__class__.agent_system_prompt),
-            ("placeholder", "{messages}")
+            ("placeholder", "{chat_history}"),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}")
         ])
 
-        # 创建链
-        self.chain = self.prompt | self.llm_with_tools
+        agent = create_openai_tools_agent(
+            llm=llm,
+            tools=self.tools,
+            prompt=self.prompt
+        )
+
+        self.agent_executor = AgentExecutor(
+            agent=agent,
+            tools=self.tools,
+            max_iterations=self.config.max_iterations,
+            return_intermediate_steps=True,
+            handle_parsing_errors=True,
+            verbose=False,
+        )
+
+        # 初始化对话历史
+        self.conversation_history: List[BaseMessage] = []
 
         logger.info(
             f"Initialized {self.__class__.agent_name} with {len(self.tools)} tools"
@@ -141,75 +159,72 @@ class BaseAgent(Runnable, ABC):
             logger.error(f"Failed to get tools: {e}")
             raise
 
+    def _find_tool(self, tool_name: str) -> Optional[BaseTool]:
+        """查找工具"""
+        for tool in self.tools:
+            if tool.name == tool_name:
+                return tool
+        return None
+
+    def reset(self):
+        """重置对话历史"""
+        self.conversation_history = []
+
     async def ainvoke(
             self,
             input: Dict[str, Any],
-            config: Optional[RunnableConfig] = None,
+            config: Optional[Any] = None,
             **kwargs
     ) -> Dict[str, Any]:
-        """异步执行 Agent"""
-        # 提取输入
-        user_input = input.get("user_input")
-        task_params = input.get("parameters", {})
-
-        if not user_input:
-            raise ValueError("'user_input' is required")
-
-        # 构建初始消息
-        messages = [HumanMessage(content=self._build_task_message(
-            user_input, task_params
-        ))]
-
-        tool_calls_log = []
-        iteration = 0
-
+        """执行单步推理（异步）"""
         try:
-            # Agent 循环
-            for iteration in range(self.config.max_iterations):
-                logger.debug(f"{self.__class__.agent_name} iteration {iteration + 1}")
+            # 1. 解析输入
+            user_input = input.get("user_input")
+            parameters = input.get("parameters", {})
 
-                # 调用 LLM
-                response = await self.chain.ainvoke({"messages": messages})
-                messages.append(response)
+            if not user_input:
+                return {
+                    "output": "No input provided",
+                    "intermediate_steps": [],
+                    "success": False,
+                    "iterations": 0
+                }
 
-                # 检查工具调用
-                if not response.tool_calls:
-                    # 任务完成
-                    logger.info(
-                        f"{self.__class__.agent_name} completed in {iteration + 1} iterations"
-                    )
-                    return {
-                        "success": True,
-                        "output": response.content,
-                        "iterations": iteration + 1,
-                        "tool_calls": tool_calls_log,
-                        "metadata": {}
-                    }
+            # 构建输入消息
+            task_message = self._build_task_message(user_input, parameters)
 
-                # 执行工具调用
-                tool_messages = await self._execute_tool_calls(
-                    response.tool_calls,
-                    tool_calls_log
-                )
-                messages.extend(tool_messages)
+            result = await self.agent_executor.ainvoke({
+                "input": task_message,
+                "chat_history": self.conversation_history
+            })
 
-            # 超过最大迭代
+            tool_call_id = input.get("tool_call_id")
+
+            # 更新对话历史
+            self.conversation_history.append(HumanMessage(content=task_message))
+            self.conversation_history.append(AIMessage(content=result["output"]))
+
+            # 提取工具调用信息
+            intermediate_steps = result.get("intermediate_steps", [])
+
             return {
-                "success": False,
-                "output": "任务未完成，超过最大迭代次数",
-                "iterations": self.config.max_iterations,
-                "tool_calls": tool_calls_log,
-                "metadata": {"reason": "max_iterations"}
+                "output": result["output"],
+                "intermediate_steps": intermediate_steps,
+                "success": True,
+                "iterations": len(intermediate_steps)
             }
 
         except Exception as e:
-            logger.error(f"{self.__class__.agent_name} failed: {e}", exc_info=True)
+            logger.error(
+                f"{self.__class__.agent_name} error: {e}",
+                exc_info=True
+            )
             return {
+                "output": f"Error: {str(e)}",
+                "intermediate_steps": [],
                 "success": False,
-                "output": f"执行失败: {str(e)}",
-                "iterations": iteration + 1,
-                "tool_calls": tool_calls_log,
-                "metadata": {"error": str(e)}
+                "iterations": 0,
+                "error": str(e)
             }
 
     def invoke(
@@ -221,66 +236,7 @@ class BaseAgent(Runnable, ABC):
         """同步执行（内部调用 ainvoke）"""
         return asyncio.run(self.ainvoke(input, config, **kwargs))
 
-    async def _execute_tool_calls(
-            self,
-            tool_calls: List[Dict[str, Any]],
-            tool_calls_log: List[str]
-    ) -> List[ToolMessage]:
-        """执行工具调用"""
-        tool_messages = []
-
-        for tool_call in tool_calls:
-            tool_name = tool_call["name"]
-            tool_args = tool_call["args"]
-            tool_id = tool_call["id"]
-
-            logger.info(f"{self.__class__.agent_name} calling: {tool_name}({tool_args})")
-            tool_calls_log.append(tool_name)
-
-            try:
-                # 查找工具
-                tool = self._find_tool(tool_name)
-                if not tool:
-                    raise ValueError(f"Tool {tool_name} not found")
-
-                # 执行工具（支持异步）
-                if asyncio.iscoroutinefunction(tool.func):
-                    result = await tool.ainvoke(tool_args)
-                else:
-                    result = tool.invoke(tool_args)
-
-                logger.info(f"Tool {tool_name} returned: {str(result)[:100]}")
-
-                tool_messages.append(
-                    ToolMessage(
-                        content=str(result),
-                        tool_call_id=tool_id
-                    )
-                )
-
-            except Exception as e:
-                logger.error(f"Tool {tool_name} failed: {e}")
-                tool_messages.append(
-                    ToolMessage(
-                        content=f"错误: {str(e)}",
-                        tool_call_id=tool_id
-                    )
-                )
-
-        return tool_messages
-
-    def _find_tool(self, tool_name: str) -> Optional[BaseTool]:
-        """查找工具"""
-        for tool in self.tools:
-            if tool.name == tool_name:
-                return tool
-        return None
-
-    def _build_task_message(
-            self,
-            user_input: str,
-            parameters: Dict[str, Any]
-    ) -> str:
+    def _build_task_message(self, user_input: str, parameters: Dict[str, Any]) -> str:
         """构建任务消息"""
         message = f"任务: {user_input}\n"
 

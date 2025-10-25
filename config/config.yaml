@@ -55,13 +55,22 @@ qiniu:
   asr:
     model: "asr"
     format: "wav"
-  tts:
-    model: "tts-1"
-    voice: "alloy"
   llm:
-    model: "gpt-oss-120b"
+    model: "qwen3-max"
     temperature: 0.7
     max_tokens: 2000
+
+  # TTS 配置
+  tts:
+    provider: "edge"
+    edge:
+      # 音色选择：
+      # 女声：xiaoxiao, xiaoyi, xiaoyou, yunxi, yunxia
+      # 男声：yunyang, yunjian, yunhao
+      voice: "yunyang"     # 云扬（男声，新闻风格）
+      rate: "+10%"         # 语速（-50% 到 +100%）
+      volume: "+0%"        # 音量（-50% 到 +50%）
+      pitch: "+0Hz"        # 音高（-50Hz 到 +50Hz）
 
 # 录音设置
 recording:

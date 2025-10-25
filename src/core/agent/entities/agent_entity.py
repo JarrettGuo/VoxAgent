@@ -64,9 +64,12 @@ class StepState(BaseModel):
     error: str = ""
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
+    # 执行追踪
+    iteration_count: int = 0
+
 
 class ExecutionState(BaseModel):
-    """执行状态 - 用于 LangGraph StateGraph"""
+    """执行状态 - 用于 LangGraph"""
     plan: Dict[str, Any] = Field(default_factory=dict)
     steps: List[StepState] = Field(default_factory=list)
     current_step_index: int = 0
