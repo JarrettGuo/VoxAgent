@@ -12,7 +12,7 @@ from src.utils.logger import logger
 
 class TaskOrchestrator:
     """
-    任务协调器 - 使用 LangGraph 管理执行流程（简化版）
+    任务协调器 - 使用 LangGraph 管理执行流程
     """
 
     name: str = "task_orchestrator"

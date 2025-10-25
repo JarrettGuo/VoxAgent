@@ -90,3 +90,7 @@ agent:
   planner:
     max_iterations: 5
     enable_memory: false
+
+# Google Serper 配置
+google_serper:
+  api_key: "b811356b2cc9edb2feff14c7e325c0eeef646844"

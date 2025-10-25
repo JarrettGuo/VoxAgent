@@ -21,6 +21,11 @@ class DuckDuckGoSearchSchema(BaseModel):
     query: str = Field(description="需要检索查询的语句")
 
 
+class GoogleSerperSchema(BaseModel):
+    """Google Serper 搜索参数"""
+    query: str = Field(description="需要检索查询的语句，例如：'2024年人工智能发展趋势'")
+
+
 class WikipediaSearchSchema(BaseModel):
     """维基百科搜索参数"""
     query: str = Field(description="需要在维基百科中查询的关键词")

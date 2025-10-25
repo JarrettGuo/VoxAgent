@@ -16,7 +16,7 @@ from src.core.tools.file import (
     file_create, file_read, file_search, file_list,
     file_find_recent, file_delete, file_append, file_write
 )
-from src.core.tools.search import duckduckgo_search, wikipedia_search
+from src.core.tools.search import duckduckgo_search, wikipedia_search, google_serper
 from src.core.tools.system import app_control
 from src.core.tools.weather import gaode_weather
 from src.utils.config import config
@@ -56,6 +56,15 @@ class ToolRegistry:
             self.register(wikipedia_search())
         except Exception as e:
             logger.warning(f"Wikipedia registration failed: {e}")
+
+        try:
+            api_key = config.get("google_serper.api_key")
+            if api_key:
+                self.register(google_serper(api_key=api_key))
+            else:
+                logger.warning("Google Serper API key not configured, skipping")
+        except Exception as e:
+            logger.warning(f"Google Serper registration failed: {e}")
 
         # 天气工具
         try:

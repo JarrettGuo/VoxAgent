@@ -116,6 +116,13 @@ class CommandProcessor:
         self.assistant.is_processing = True
 
         try:
+            if not self._initialized:
+                logger.info("🔄 First-time initialization...")
+                if not self._initialize_system():
+                    logger.error("❌ System initialization failed")
+                    self._simple_tts_feedback("系统初始化失败，请稍后重试")
+                    return
+
             # 暂停唤醒词检测,避免麦克风冲突
             logger.info("⏸️  Pausing wake word detection...")
             self.assistant.detector.pause()
@@ -156,14 +163,13 @@ class CommandProcessor:
             logger.error(f"❌ Processing failed: {e}")
             import traceback
             traceback.print_exc()
+            self._simple_tts_feedback("抱歉，处理过程中遇到了错误")
 
         finally:
             self.assistant.is_processing = False
 
             # 等待录音器完全释放资源
             time.sleep(0.3)
-
-            # 恢复唤醒词检测
             logger.info("▶️  Resuming wake word detection...")
             self.assistant.detector.resume()
 
@@ -468,15 +474,32 @@ class CommandProcessor:
         logger.info("🔊 Providing voice feedback...")
         logger.info(f"💬 Response: {text}")
 
-        # 如果 TTS 客户端可用，则播放语音
-        if self.tts_client:
+        # 确保TTS客户端可用
+        if not self.tts_client:
+            logger.warning("⚠️  TTS client not initialized")
+            # 尝试创建TTS客户端
             try:
-                self.tts_client.speak(text, speed=1.1)
+                edge_config = self.config.get("tts.edge", {})
+                self.tts_client = tts_client(
+                    voice=edge_config.get("voice", "yunyang"),
+                    rate=edge_config.get("rate", "+0%"),
+                    volume=edge_config.get("volume", "+0%"),
+                    pitch=edge_config.get("pitch", "+0Hz")
+                )
+                logger.info("✅ TTS client created on-demand")
             except Exception as e:
-                logger.error(f"❌ TTS playback failed: {e}")
-                logger.info("💬 Fallback to text output")
-        else:
-            logger.info("💬 TTS not available, text output only")
+                logger.error(f"❌ Failed to create TTS client: {e}")
+                logger.info("💬 Fallback to text output only")
+                return
+
+        # 播放语音
+        try:
+            logger.info("🔊 Starting speech playback...")
+            self.tts_client.speak(text)
+            logger.info("✅ Speech playback completed")
+        except Exception as e:
+            logger.error(f"❌ TTS playback failed: {e}")
+            logger.info("💬 Fallback to text output")
 
     def _generate_final_summary(
             self,
@@ -494,18 +517,21 @@ class CommandProcessor:
         if not orchestrator_result:
             return "任务执行遇到了问题，请稍后重试。"
 
-        # 初始化检查
-        if not self._initialized:
-            if not self._initialize_system():
-                return self._create_simple_summary(orchestrator_result)
-
         # 使用 Summarizer Agent 生成总结
         try:
             logger.info("📝 Generating user-friendly summary...")
+
+            # 确保summarizer已初始化
+            if not self.summarizer:
+                logger.warning("⚠️  Summarizer not initialized, using simple summary")
+                return self._create_simple_summary(orchestrator_result)
+
             summary = self.summarizer.summarize_sync(
                 original_query=original_query,
                 execution_summary=orchestrator_result
             )
+
+            logger.info(f"✅ Summary generated: {summary[:100]}...")
             return summary
 
         except Exception as e:
@@ -526,3 +552,13 @@ class CommandProcessor:
         else:
             failed = total_steps - successful_steps
             return f"我完成了{successful_steps}个任务，但还有{failed}个任务未能完成。"
+
+    def _simple_tts_feedback(self, message: str):
+        """简单的TTS反馈（用于错误情况）"""
+        try:
+            if self.tts_client:
+                self.tts_client.speak(message)
+            else:
+                logger.info(f"💬 {message}")
+        except Exception as e:
+            logger.error(f"❌ TTS feedback failed: {e}")

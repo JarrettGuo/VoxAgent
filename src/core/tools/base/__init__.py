@@ -30,6 +30,7 @@ from .schemas import (
     WikipediaSearchSchema,
     GaodeWeatherSchema,
     Dalle3Schema,
+    GoogleSerperSchema,
 )
 
 __all__ = [
@@ -52,4 +53,5 @@ __all__ = [
     "MusicPlaySchema",
     "MusicControlSchema",
     "MusicSearchSchema",
+    "GoogleSerperSchema",
 ]

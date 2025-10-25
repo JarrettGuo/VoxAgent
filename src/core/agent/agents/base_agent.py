@@ -81,6 +81,11 @@ class BaseAgent(Runnable, ABC):
             f"(priority={priority}, platforms={platforms or 'all'})"
         )
 
+    @classmethod
+    def generate_system_prompt(cls, tools: List[BaseTool]) -> str:
+        """生成动态系统 prompt - 子类可以重写此方法来实现自定义的动态 prompt 生成逻辑"""
+        return cls.agent_system_prompt
+
     def __init__(
             self,
             llm: BaseChatModel,
@@ -107,9 +112,12 @@ class BaseAgent(Runnable, ABC):
         # 绑定工具到 LLM
         self.llm_with_tools = llm.bind_tools(self.tools)
 
+        # 生成动态系统 prompt
+        system_prompt = self.__class__.generate_system_prompt(self.tools)
+
         # 构建 Prompt
         self.prompt = ChatPromptTemplate.from_messages([
-            ("system", self.__class__.agent_system_prompt),
+            ("system", system_prompt),
             ("placeholder", "{chat_history}"),
             ("human", "{input}"),
             ("placeholder", "{agent_scratchpad}")
@@ -158,13 +166,6 @@ class BaseAgent(Runnable, ABC):
         except ValueError as e:
             logger.error(f"Failed to get tools: {e}")
             raise
-
-    def _find_tool(self, tool_name: str) -> Optional[BaseTool]:
-        """查找工具"""
-        for tool in self.tools:
-            if tool.name == tool_name:
-                return tool
-        return None
 
     def reset(self):
         """重置对话历史"""
