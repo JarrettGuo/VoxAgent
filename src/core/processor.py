@@ -94,7 +94,7 @@ class CommandProcessor:
             logger.error(f"System initialization failed: {e}", exc_info=True)
             return False
 
-    def process_command(self):
+    def process_command(self, callback):
         """处理用户指令的主流程"""
         self.assistant.is_processing = True
 
@@ -117,13 +117,24 @@ class CommandProcessor:
             if not text:
                 return
 
+            if callback is not None:
+                callback(f"User Input: {text}")
+
             logger.info(f"📝 Recognized text: {text}")
 
             # 3. 理解意图并规划任务（使用 PlannerAgent）
             execution_plan = self._understand_and_plan(text)
 
+            if callback is not None:
+                plans = [ plan.description for plan in execution_plan.tasks]
+                output = '\n'.join(plans)
+                callback(f"Plan Generated:\n {output}")
+
             # 4. 执行任务计划（使用 TaskOrchestrator）
             execution_result = self._execute_plan(execution_plan)
+
+            if callback is not None:
+                callback(f"Executed: {execution_result}")
 
             # 5. 语音反馈
             self._text_to_speech(execution_result)
