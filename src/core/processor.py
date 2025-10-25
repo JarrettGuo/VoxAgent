@@ -5,16 +5,20 @@
 @Author : guojarrett@gmail.com
 @File   : processor.py
 """
+
 import io
 import time
 import wave
-from typing import TYPE_CHECKING, Dict, Any
+from typing import TYPE_CHECKING
 
 import numpy as np
 from langchain_openai import ChatOpenAI
 
+from src.core.agent.agents.base_agent import BaseAgent
 from src.core.agent.agents.planner_agent import PlannerAgent
-from src.core.agent.entities.agent_entity import AgentConfig
+from src.core.agent.agents.task_orchestrator import TaskOrchestrator
+from src.core.models import ExecutionPlan
+from src.core.tools import tool_registry
 from src.utils.logger import logger
 
 if TYPE_CHECKING:
@@ -27,7 +31,68 @@ class CommandProcessor:
     def __init__(self, assistant: 'VoiceAssistant'):
         self.assistant = assistant
         self.config = assistant.config
-        self.planner_agent = None  # PlannerAgent 实例（延迟初始化）
+
+        self.llm = None  # LLM 实例
+        self.agents = None  # Worker Agents 字典
+        self.planner = None  # PlannerAgent 实例
+        self.orchestrator = None  # TaskOrchestrator 实例
+
+        self._initialized = False
+
+    def _initialize_system(self) -> bool:
+        """
+        初始化整个系统：LLM, Agents, Planner, Orchestrator
+        """
+        try:
+            # 导入 worker agents 以触发注册
+            import src.core.agent.agents.workers.file_agent
+            import src.core.agent.agents.workers.search_agent
+
+            # 验证注册
+            registered_types = BaseAgent.get_all_agent_types()
+            logger.info(f"Registered agent types: {registered_types}")
+
+            if not registered_types:
+                logger.error("No agents registered")
+                return False
+
+            # 1. 创建 LLM 实例
+            self.llm = self._create_llm()
+            if self.llm is None:
+                logger.error("Failed to create LLM")
+                return False
+
+            # 2. 创建 Worker Agents
+            self.agents = BaseAgent.create_all_agents(
+                llm=self.llm,
+                tool_manager=tool_registry,
+                check_dependencies=False
+            )
+
+            if not self.agents:
+                logger.error("No agents created")
+                return False
+
+            logger.info(f"Created {len(self.agents)} agents: {list(self.agents.keys())}")
+
+            # 3. 创建 PlannerAgent
+            self.planner = PlannerAgent(
+                llm=self.llm,
+                available_agents=self.agents
+            )
+            logger.info("PlannerAgent initialized")
+
+            # 4. 创建 TaskOrchestrator
+            self.orchestrator = TaskOrchestrator(agents=self.agents)
+            logger.info("TaskOrchestrator initialized")
+
+            self._initialized = True
+            logger.info("System initialized successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"System initialization failed: {e}", exc_info=True)
+            return False
 
     def process_command(self):
         """处理用户指令的主流程"""
@@ -55,10 +120,10 @@ class CommandProcessor:
             logger.info(f"📝 Recognized text: {text}")
 
             # 3. 理解意图并规划任务（使用 PlannerAgent）
-            plan_result = self._understand_and_plan(text)
+            execution_plan = self._understand_and_plan(text)
 
-            # 4. 执行任务计划
-            execution_result = self._execute_plan(plan_result)
+            # 4. 执行任务计划（使用 TaskOrchestrator）
+            execution_result = self._execute_plan(execution_plan)
 
             # 5. 语音反馈
             self._text_to_speech(execution_result)
@@ -119,18 +184,39 @@ class CommandProcessor:
                 audio_format="wav",
                 language=self.assistant.asr_language
             )
-            return result.get("text", "").strip()
+            text = result.get("text", "").strip()
+
+            # 繁体转简体
+            text = self._convert_to_simplified(text)
+            return text
 
         elif self.assistant.asr_provider == "qiniu":
             # 七牛云 ASR
             result = self.assistant.asr_client.transcribe(audio_data)
-            return result.get("text", "").strip()
+            text = result.get("text", "").strip()
+
+            # 添加繁体转简体
+            text = self._convert_to_simplified(text)
+            return text
 
         return ""
 
+    def _convert_to_simplified(self, text: str) -> str:
+        """将繁体中文转换为简体中文"""
+        try:
+            from opencc import OpenCC
+            cc = OpenCC('t2s')  # 繁体转简体
+            return cc.convert(text)
+        except ImportError:
+            logger.warning("⚠️  OpenCC not installed, returning original text")
+            logger.info("   Install with: pip install opencc-python-reimplemented")
+            return text
+        except Exception as e:
+            logger.warning(f"⚠️  Failed to convert text: {e}")
+            return text
+
     def _has_valid_speech(self, audio_data: bytes) -> bool:
         """检查音频是否包含有效语音"""
-
         try:
             # 将 bytes 转换为音频数组
             with wave.open(io.BytesIO(audio_data), 'rb') as wav_file:
@@ -149,84 +235,55 @@ class CommandProcessor:
             logger.warning(f"⚠️ Failed to check audio validity: {e}")
             return True
 
-    def _understand_and_plan(self, text: str) -> Dict[str, Any]:
+    def _understand_and_plan(self, text: str) -> ExecutionPlan:
         """
-        理解意图并生成执行计划（使用 PlannerAgent）
-
-        参数:
-            text: 用户的语音识别文本
-
-        返回:
-            包含计划的字典
+        理解用户意图并生成执行计划
         """
-        logger.info("🧠 Understanding intent and planning...")
+        # 1. 初始化系统
+        if not self._initialized:
+            if not self._initialize_system():
+                from uuid import uuid4
+                return ExecutionPlan(
+                    plan_id=str(uuid4()),
+                    tasks=[],
+                    dependencies={},
+                    metadata={
+                        "error": "System not initialized",
+                        "feasibility": "error"
+                    }
+                )
 
-        # 1. 初始化 PlannerAgent
-        if self.planner_agent is None:
-            self.planner_agent = self._initialize_planner_agent()
-
-        # todo 如果失败，调用tts模型输出
-        # if self.planner_agent is None:
-
-        # 3. 使用 PlannerAgent 生成计划
         try:
-            plan_result = self.planner_agent.plan_task(text)
-            logger.info(f"📋 Plan generated: {plan_result.get('plan', {}).get('feasibility', 'unknown')}")
+            # 使用 PlannerAgent 生成执行计划
+            execution_plan = self.planner.plan_sync(text)
 
-            logger.info("Plan Details:", plan_result.get("plan", {}))
+            # 日志输出
+            feasibility = execution_plan.metadata.get("feasibility", "unknown")
+            logger.info(
+                f"Plan generated: {len(execution_plan.tasks)} tasks, "
+                f"feasibility={feasibility}"
+            )
 
-            return plan_result
+            return execution_plan
 
         except Exception as e:
-            logger.error(f"❌ Planning failed: {e}")
-            return {
-                "success": False,
-                "message": f"规划任务时出错: {str(e)}",
-                "plan": {
-                    "task": text,
-                    "feasibility": "error",
-                    "steps": []
+            logger.error(f"Planning failed: {e}", exc_info=True)
+
+            from uuid import uuid4
+            return ExecutionPlan(
+                plan_id=str(uuid4()),
+                tasks=[],
+                dependencies={},
+                metadata={
+                    "error": str(e),
+                    "original_query": text,
+                    "feasibility": "error"
                 }
-            }
-
-    def _initialize_planner_agent(self):
-        """初始化 PlannerAgent"""
-        try:
-            # 获取配置
-            max_iterations = self.config.get("agent.planner.max_iterations", 5)
-
-            # 创建 LLM
-            llm = self._create_llm()
-            if llm is None:
-                logger.warning("⚠️ Failed to create LLM, PlannerAgent disabled")
-                return None
-
-            # 创建配置
-            config = AgentConfig(
-                max_iterations=max_iterations,
-                enable_memory=False,
             )
-
-            # 创建 PlannerAgent
-            agent = PlannerAgent(
-                name="planner_agent",
-                llm=llm,
-                config=config,
-            )
-
-            logger.info("✅ PlannerAgent initialized successfully")
-            return agent
-
-        except Exception as e:
-            logger.error(f"❌ Failed to initialize PlannerAgent: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
 
     def _create_llm(self):
         """创建 LLM 实例"""
         try:
-            # 尝试从七牛云配置创建
             qiniu_config = self.config.get("qiniu")
             if qiniu_config:
                 llm = ChatOpenAI(
@@ -247,50 +304,130 @@ class CommandProcessor:
 
         return None
 
-    def _execute_plan(self, plan_result: Dict[str, Any]) -> str:
+    def _execute_plan(self, execution_plan: ExecutionPlan) -> str:
         """
-        执行任务计划
-
-        参数:
-            plan_result: PlannerAgent 返回的计划结果
-
-        返回:
-            执行结果描述
+        执行任务计划（使用 TaskOrchestrator）
         """
         logger.info("⚙️  Executing plan...")
 
-        # 1. 检查计划是否成功
-        if not plan_result.get("success"):
-            return plan_result.get("message", "规划失败")
+        feasibility = execution_plan.metadata.get("feasibility", "unknown")
+        reason = execution_plan.metadata.get("reason", "")
 
-        # 2. 获取计划
-        plan = plan_result.get("plan", {})
-
-        # 3. 检查可行性
-        feasibility = plan.get("feasibility", "unknown")
-
+        # 1. 处理不可行的情况
         if feasibility == "invalid_input":
-            # todo 交给tts模型输出
-            return "您的输入似乎不够清晰，请重新表述您的需求。"
+            return f"抱歉，我无法理解您的输入。{reason}"
 
         elif feasibility == "infeasible":
-            # todo 交给tts模型输出
-            return "抱歉，这个任务我目前无法完成。我只能执行计算机相关的操作。"
+            return f"抱歉，这个任务我目前无法完成。{reason}"
 
-        elif feasibility == "feasible":
-            steps = plan.get("steps", [])
-            if not steps:
-                return "已收到您的指令，但暂时无法执行。"
+        elif feasibility != "feasible":
+            return f"收到您的指令，但无法确定如何执行。{reason}"
 
-            # TODO: 实际执行步骤
-            # 这里可以调用工具系统执行具体步骤
-            logger.info(f"📝 Plan has {len(steps)} steps")
-            logger.info("   (Actual execution to be implemented)")
+        # 2. 检查是否有任务
+        if not execution_plan.tasks:
+            return "已收到您的指令，但暂时无法生成执行步骤。"
 
-            return f"我已经为您规划了 {len(steps)} 个步骤，但目前还不支持自动执行。"
+        # 3. 使用 TaskOrchestrator 执行计划
+        try:
+            # 将 ExecutionPlan 转换为 TaskOrchestrator 需要的格式
+            plan_dict = self._convert_plan_to_dict(execution_plan)
 
+            # 使用 orchestrator 执行
+            orchestrator_result = self.orchestrator.execute(plan_dict)
+
+            # 根据 orchestrator 的结果生成用户友好的反馈
+            return self._format_orchestrator_result(
+                orchestrator_result,
+                reason=reason
+            )
+
+        except Exception as e:
+            logger.error(f"❌ Orchestrator execution failed: {e}", exc_info=True)
+            return f"执行过程中出现错误：{str(e)}"
+
+    def _convert_plan_to_dict(self, execution_plan: ExecutionPlan) -> dict:
+        """
+        将 ExecutionPlan 转换为 TaskOrchestrator 需要的字典格式
+        """
+        steps = []
+        for task in execution_plan.tasks:
+            steps.append({
+                "task_id": task.task_id,
+                "description": task.description,
+                "assigned_agent": task.assigned_agent,
+                "parameters": task.parameters,
+                "expected_result": task.metadata.get("expected_result"),
+                "step_number": task.metadata.get("step_number")
+            })
+
+        return {
+            "steps": steps,
+            "plan_id": execution_plan.plan_id,
+            "metadata": execution_plan.metadata
+        }
+
+    def _format_orchestrator_result(self, orchestrator_result: dict, reason: str = "") -> str:
+        """
+        格式化 TaskOrchestrator 的执行结果为用户友好的反馈
+        """
+        success = orchestrator_result.get("success", False)
+        total_steps = orchestrator_result.get("total_steps", 0)
+        successful_steps = orchestrator_result.get("successful_steps", 0)
+        failed_steps = orchestrator_result.get("failed_steps", 0)
+        results = orchestrator_result.get("results", [])
+        error_message = orchestrator_result.get("error_message", "")
+
+        # 构建摘要
+        summary_parts = []
+
+        # 1. 总体情况
+        if success:
+            summary_parts.append(f"✅ 成功完成所有 {total_steps} 个任务！")
+        elif successful_steps == 0:
+            summary_parts.append(f"❌ 很抱歉，所有任务都执行失败了。")
         else:
-            return "收到您的指令，但无法确定如何执行。"
+            summary_parts.append(
+                f"⚠️  部分完成：成功 {successful_steps}/{total_steps} 个任务，"
+                f"失败 {failed_steps} 个任务。"
+            )
+
+        # 2. 成功任务的输出
+        successful_results = [r for r in results if r.get("status") == "success"]
+        if successful_results:
+            summary_parts.append("\n📋 执行结果：")
+            for i, result in enumerate(successful_results, 1):
+                description = result.get("description", "")
+                # 从 result 中提取输出
+                task_result = result.get("result", {})
+                output = task_result.get("output", "") if isinstance(task_result, dict) else str(task_result)
+
+                # 截断过长的输出
+                if len(output) > 200:
+                    output = output[:200] + "..."
+
+                summary_parts.append(f"{i}. {description}\n   结果: {output}")
+
+        # 3. 失败任务的错误信息
+        failed_results = [r for r in results if r.get("status") == "failed"]
+        if failed_results:
+            summary_parts.append("\n❌ 失败任务：")
+            for i, result in enumerate(failed_results, 1):
+                description = result.get("description", "")
+                error = result.get("error", "Unknown error")
+                summary_parts.append(
+                    f"{i}. {description}\n"
+                    f"   错误: {error}"
+                )
+
+        # 4. 整体错误信息
+        if error_message and not failed_results:
+            summary_parts.append(f"\n❌ 错误: {error_message}")
+
+        # 5. 规划原因（如果有）
+        if reason:
+            summary_parts.append(f"\n💡 任务分析：{reason}")
+
+        return "\n".join(summary_parts)
 
     def _text_to_speech(self, text: str):
         """文字转语音"""

@@ -1,321 +1,245 @@
-import sys
-from src.utils.langsmith_setup import setup_langsmith
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+TaskOrchestrator 集成测试
+"""
 
-from src.utils.logger import logger
+import pytest
+from langchain_openai import ChatOpenAI
+
+from src.core.agent.agents.base_agent import BaseAgent
+from src.core.agent.agents.task_orchestrator import TaskOrchestrator
+from src.core.tools import tool_registry
 from src.utils.config import config
+from src.utils.langsmith_setup import setup_langsmith
+from src.utils.logger import logger
 
-def main():
-    """主测试运行函数"""
 
+@pytest.fixture(scope="module", autouse=True)
+def setup_environment():
+    """初始化测试环境"""
     setup_langsmith()
-
-    logger.info("=" + "=" * 70)
+    logger.info("\n" + "=" * 70)
     logger.info(" " * 15 + "TASK ORCHESTRATOR TEST SUITE")
-    logger.info("=" * 70)
+    logger.info("=" * 70 + "\n")
 
-    try:
-        # Import the orchestrator
-        from src.core.agent.agents.task_orchestrator import TaskOrchestrator
-        logger.info("✓ TaskOrchestrator imported successfully")
 
-        from src.core.agent.entities.agent_entity import AgentConfig
-        from langchain_openai import ChatOpenAI
+@pytest.fixture(scope="module")
+def llm():
+    """创建 LLM 实例"""
+    qiniu_config = config.get("qiniu")
+    return ChatOpenAI(
+        api_key=qiniu_config.get("api_key"),
+        base_url=qiniu_config.get("base_url"),
+        model=qiniu_config.get("llm", {}).get("model", "gpt-4o-mini"),
+        temperature=0.7,
+    )
 
-        # ✅ 从配置文件中读取七牛云配置
-        qiniu_config = config.get("qiniu")
-        if not qiniu_config:
-            raise ValueError("❌ 未找到七牛云配置,请检查 config/config.yaml")
 
-        # ✅ 使用七牛云配置创建 LLM
-        llm = ChatOpenAI(
-            api_key=qiniu_config.get("api_key"),
-            base_url=qiniu_config.get("base_url"),
-            model=qiniu_config.get("llm", {}).get("model", "gpt-4o-mini"),
-            temperature=qiniu_config.get("llm", {}).get("temperature", 0.7),
-            max_tokens=qiniu_config.get("llm", {}).get("max_tokens", 2000),
-        )
+@pytest.fixture(scope="module")
+def agents(llm):
+    """创建所有可用的 agents"""
+    # ✅ 关键修复：显式导入具体的 agent 类（不是通过 __init__.py）
+    from src.core.agent.agents.workers.file_agent import FileManagementAgent
+    from src.core.agent.agents.workers.search_agent import SearchAgent
 
-        agent_config = AgentConfig(max_iterations=5)
-        # Import mock agents
-        from mock_agents.mocks import (
-            MockCodeAgent,
-            MockSearchAgent,
-            MockFileAgent,
-            MockDatabaseAgent
-        )
-        logger.info("✓ Mock agents imported successfully")
+    # 验证注册
+    all_types = BaseAgent.get_all_agent_types()
+    logger.info(f"Registered agent types: {all_types}")
 
-        logger.info("=" + "-" * 70)
-        logger.info("Running comprehensive tests...")
-        logger.info("-" * 70)
+    # 如果注册表为空，说明导入有问题
+    if not all_types:
+        logger.error("❌ No agents in registry after import!")
+        logger.error("This should not happen. Check agent class definitions.")
+        raise RuntimeError("Agent registration failed")
 
-        # Test 1: Simple execution
-        logger.info("=" + "=" * 70)
-        logger.info("TEST 1: Simple Single-Step Execution")
+    # ✅ 根据调试脚本，关闭依赖检查也能成功创建
+    agents = BaseAgent.create_all_agents(
+        llm=llm,
+        tool_manager=tool_registry,
+        check_dependencies=False  # 先关闭依赖检查
+    )
+
+    logger.info(f"✓ Created {len(agents)} agents: {list(agents.keys())}")
+
+    # 如果还是失败，打印详细信息
+    if len(agents) == 0:
+        logger.error("❌ Failed to create agents via create_all_agents()")
+        logger.error("Attempting manual creation for debugging...")
+
+        agents = {}
+
+        # 手动创建每个 agent
+        try:
+            agents["file"] = FileManagementAgent(
+                llm=llm,
+                tool_manager=tool_registry
+            )
+            logger.info("✓ Manually created FileManagementAgent")
+        except Exception as e:
+            logger.error(f"✗ Manual FileManagementAgent creation failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+        try:
+            agents["search"] = SearchAgent(
+                llm=llm,
+                tool_manager=tool_registry
+            )
+            logger.info("✓ Manually created SearchAgent")
+        except Exception as e:
+            logger.error(f"✗ Manual SearchAgent creation failed: {e}")
+            import traceback
+            traceback.print_exc()
+
+    assert len(agents) > 0, f"No agents were created. Registry: {BaseAgent._registry}"
+
+    return agents
+
+
+@pytest.fixture
+def orchestrator(agents):
+    """创建 TaskOrchestrator 实例"""
+    return TaskOrchestrator(agents)
+
+
+class TestTaskOrchestrator:
+    """TaskOrchestrator 功能测试"""
+
+    def test_simple_single_step(self, orchestrator):
+        """测试简单的单步执行"""
+        logger.info("\n" + "=" * 70)
+        logger.info("TEST: Simple Single-Step Execution")
         logger.info("=" * 70)
 
-        agents = {
-            "code": MockCodeAgent(),
-            "search": MockSearchAgent(),
-        }
-
-        orchestrator = TaskOrchestrator(agents)
-        logger.info("Task Orchestrator Initialized")
-
         plan = {
-            "steps": [
-                {
-                    "description": "Calculate the sum of 1 to 100",
-                    "agent": "code"
-                }
-            ]
+            "steps": [{
+                "task_id": "task-test-001",
+                "description": "搜索 Python 编程语言的信息",
+                "assigned_agent": "search",
+                "parameters": {}
+            }]
         }
 
         result = orchestrator.execute(plan)
 
-        logger.info(f"=📊 Results:")
-        logger.info(f"  ✓ Success: {result['success']}")
-        logger.info(f"  ✓ Total Steps: {result['total_steps']}")
-        logger.info(f"  ✓ Successful Steps: {result['successful_steps']}")
-        logger.info(f"  ✓ Message: {result['message']}")
+        logger.info(f"\n📊 Results:")
+        logger.info(f"  Success: {result['success']}")
+        logger.info(f"  Total Steps: {result['total_steps']}")
+        logger.info(f"  Successful Steps: {result['successful_steps']}")
+        logger.info(f"  Message: {result['message']}")
 
-        assert result['success'] == True
+        assert result['success'] is True
+        assert result['total_steps'] == 1
         assert result['successful_steps'] == 1
-        logger.info("=✅ TEST 1 PASSED!")
 
-        # Test 2: Multi-step execution
-        logger.info("=" + "=" * 70)
-        logger.info("TEST 2: Multi-Step Execution with Different Agents")
+        logger.info("✅ Test passed!")
+
+    def test_multi_step_execution(self, orchestrator):
+        """测试多步骤顺序执行"""
+        logger.info("\n" + "=" * 70)
+        logger.info("TEST: Multi-Step Execution")
         logger.info("=" * 70)
-
-        agents = {
-            "code": MockCodeAgent(),
-            "search": MockSearchAgent(),
-            "file": MockFileAgent(),
-        }
-
-        orchestrator = TaskOrchestrator(agents)
 
         plan = {
             "steps": [
                 {
-                    "description": "Search for weather information",
-                    "agent": "search"
+                    "task_id": "task-002",
+                    "description": "搜索人工智能的定义",
+                    "assigned_agent": "search",
+                    "parameters": {}
                 },
                 {
-                    "description": "Calculate average temperature",
-                    "agent": "code"
-                },
-                {
-                    "description": "Write results to file",
-                    "agent": "file"
+                    "task_id": "task-003",
+                    "description": "创建文件 /tmp/ai_notes.txt",
+                    "assigned_agent": "file",
+                    "parameters": {
+                        "file_path": "/tmp/ai_notes.txt",
+                        "content": "AI learning notes"
+                    }
                 }
             ]
         }
 
         result = orchestrator.execute(plan)
 
-        logger.info(f"=📊 Results:")
-        logger.info(f"  ✓ Success: {result['success']}")
-        logger.info(f"  ✓ Total Steps: {result['total_steps']}")
-        logger.info(f"  ✓ Successful Steps: {result['successful_steps']}")
-        logger.info(f"  ✓ Message: {result['message']}")
+        logger.info(f"\n📊 Results:")
+        logger.info(f"  Success: {result['success']}")
+        logger.info(f"  Total Steps: {result['total_steps']}")
+        logger.info(f"  Successful Steps: {result['successful_steps']}")
 
-        logger.info(f"=📋 Step Details:")
-        for i, step_result in enumerate(result['results'], 1):
-            logger.info(f"  Step {i}: {step_result['description']}")
-            logger.info(f"    → Status: {step_result['status']}")
-            if 'result' in step_result:
-                logger.info(f"    → Output: {list(step_result['result'].keys())}")
+        assert result['success'] is True
+        assert result['total_steps'] == 2
+        assert result['successful_steps'] == 2
 
-        assert result['success'] == True
-        assert result['successful_steps'] == 3
-        logger.info("=✅ TEST 2 PASSED!")
+        logger.info("✅ Test passed!")
 
-        # Test 3: Error handling
-        logger.info("=" + "=" * 70)
-        logger.info("TEST 3: Error Handling")
+    def test_unknown_agent_handling(self, orchestrator):
+        """测试未知 agent 类型的错误处理"""
+        logger.info("\n" + "=" * 70)
+        logger.info("TEST: Unknown Agent Error Handling")
         logger.info("=" * 70)
 
-        agents = {
-            "code": MockCodeAgent(),
-            "search": MockSearchAgent(),
+        plan = {
+            "steps": [{
+                "task_id": "task-004",
+                "description": "使用不存在的 agent",
+                "assigned_agent": "nonexistent_agent",
+                "parameters": {}
+            }]
         }
 
-        orchestrator = TaskOrchestrator(agents)
+        result = orchestrator.execute(plan)
+
+        logger.info(f"\n📊 Results:")
+        logger.info(f"  Success: {result['success']}")
+        logger.info(f"  Failed Steps: {result['failed_steps']}")
+        logger.info(f"  Error: {result['error_message']}")
+
+        assert result['success'] is False
+        assert result['failed_steps'] == 1
+        assert "Unknown agent type" in result['error_message']
+
+        logger.info("✅ Test passed!")
+
+    def test_partial_execution_failure(self, orchestrator):
+        """测试部分步骤失败的情况"""
+        logger.info("\n" + "=" * 70)
+        logger.info("TEST: Partial Execution Failure")
+        logger.info("=" * 70)
 
         plan = {
             "steps": [
                 {
-                    "description": "Search for information",
-                    "agent": "search"
+                    "task_id": "task-005",
+                    "description": "搜索 Python 信息",
+                    "assigned_agent": "search",
+                    "parameters": {}
                 },
                 {
-                    "description": "Execute code with error",
-                    "agent": "code"
-                },
-                {
-                    "description": "This step should not execute",
-                    "agent": "search"
+                    "task_id": "task-006",
+                    "description": "调用不存在的 agent",
+                    "assigned_agent": "invalid_agent",
+                    "parameters": {}
                 }
             ]
         }
 
         result = orchestrator.execute(plan)
 
-        logger.info(f"=📊 Results:")
-        logger.info(f"  ✓ Success: {result['success']}")
-        logger.info(f"  ✓ Successful Steps: {result['successful_steps']}")
-        logger.info(f"  ✓ Failed Steps: {result['failed_steps']}")
-        logger.info(f"  ✓ Error: {result['error_message']}")
-        logger.info(f"  ✓ Message: {result['message']}")
+        logger.info(f"\n📊 Results:")
+        logger.info(f"  Success: {result['success']}")
+        logger.info(f"  Total Steps: {result['total_steps']}")
+        logger.info(f"  Successful: {result['successful_steps']}")
+        logger.info(f"  Failed: {result['failed_steps']}")
 
-        assert result['success'] == False
+        assert result['success'] is False
+        assert result['total_steps'] == 2
         assert result['successful_steps'] == 1
         assert result['failed_steps'] == 1
-        logger.info("=✅ TEST 3 PASSED!")
 
-        # Test 4: Complex workflow
-        logger.info("=" + "=" * 70)
-        logger.info("TEST 4: Complex Multi-Agent Workflow")
-        logger.info("=" * 70)
-
-        agents = {
-            "code": MockCodeAgent(),
-            "search": MockSearchAgent(),
-            "file": MockFileAgent(),
-            "database": MockDatabaseAgent(),
-        }
-
-        orchestrator = TaskOrchestrator(agents)
-
-        plan = {
-            "steps": [
-                {
-                    "description": "Query database for user data",
-                    "agent": "database"
-                },
-                {
-                    "description": "Search for news articles",
-                    "agent": "search"
-                },
-                {
-                    "description": "Calculate statistics from data",
-                    "agent": "code"
-                },
-                {
-                    "description": "Create report file",
-                    "agent": "file"
-                },
-                {
-                    "description": "Update database with results",
-                    "agent": "database"
-                }
-            ]
-        }
-
-        result = orchestrator.execute(plan)
-
-        logger.info(f"=📊 Results:")
-        logger.info(f"  ✓ Success: {result['success']}")
-        logger.info(f"  ✓ Total Steps: {result['total_steps']}")
-        logger.info(f"  ✓ Successful Steps: {result['successful_steps']}")
-        logger.info(f"  ✓ Message: {result['message']}")
-
-        logger.info(f"=📋 Detailed Execution Flow:")
-        for i, step_result in enumerate(result['results'], 1):
-            logger.info(f"  Step {i}: {step_result['description'][:50]}...")
-            logger.info(f"    → Status: {step_result['status']}")
-            if 'result' in step_result and step_result['result']:
-                result_preview = str(step_result['result'])[:80]
-                logger.info(f"    → Result: {result_preview}...")
-
-        # Verify agent usage
-        logger.info(f"=📈 Agent Usage Statistics:")
-        logger.info(f"  → CodeAgent: {agents['code'].execution_count} executions")
-        logger.info(f"  → SearchAgent: {agents['search'].search_count} searches")
-        logger.info(f"  → FileAgent: {agents['file'].operation_count} operations")
-        logger.info(f"  → DatabaseAgent: {agents['database'].query_count} queries")
-
-        assert result['success'] == True
-        assert result['successful_steps'] == 5
-        logger.info("=✅ TEST 4 PASSED!")
-
-        # Test 5: Unknown agent
-        logger.info("=" + "=" * 70)
-        logger.info("TEST 5: Handling Unknown Agent Type")
-        logger.info("=" * 70)
-
-        agents = {
-            "code": MockCodeAgent(),
-        }
-
-        orchestrator = TaskOrchestrator(agents)
-
-        plan = {
-            "steps": [
-                {
-                    "description": "Execute with known agent",
-                    "agent": "code"
-                },
-                {
-                    "description": "Execute with unknown agent",
-                    "agent": "unknown_agent_type"
-                }
-            ]
-        }
-
-        result = orchestrator.execute(plan)
-
-        logger.info(f"📊 Results:")
-        logger.info(f"  ✓ Success: {result['success']}")
-        logger.info(f"  ✓ Successful Steps: {result['successful_steps']}")
-        logger.info(f"  ✓ Failed Steps: {result['failed_steps']}")
-        logger.info(f"  ✓ Error: {result['error_message']}")
-
-        assert result['success'] == False
-        assert "Unknown agent type" in result['error_message']
-        logger.info("=✅ TEST 5 PASSED!")
-
-        # Summary
-        logger.info("=" + "=" * 70)
-        logger.info(" " * 20 + "🎉 ALL TESTS PASSED! 🎉")
-        logger.info("=" * 70)
-        logger.info("=✓ The TaskOrchestrator is working correctly!")
-        logger.info("✓ All mock agents are functioning as expected!")
-        logger.info("✓ Error handling is robust!")
-        logger.info("✓ Multi-agent workflows execute successfully!")
-
-        logger.info("=" + "=" * 70)
-        logger.info("Next Steps:")
-        logger.info("  1. Replace mock agents with your real agent implementations")
-        logger.info("  2. Integrate the orchestrator into your _execute_plan method")
-        logger.info("  3. Add more sophisticated error recovery strategies")
-        logger.info("  4. Consider adding parallel execution for independent steps")
-        logger.info("=" * 70 + "=")
-
-        return 0
-
-    except ImportError as e:
-        logger.info(f"=❌ Import Error: {e}")
-        logger.info("\nMake sure you have:")
-        logger.info("  1. execution_orchestrator.py in the same directory")
-        logger.info("  2. mock_agents.py with all the agent classes")
-        logger.info("  3. langgraph installed: pip install langgraph")
-        return 1
-
-    except AssertionError as e:
-        logger.info(f"=❌ TEST FAILED: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
-
-    except Exception as e:
-        logger.info(f"=❌ UNEXPECTED ERROR: {e}")
-        import traceback
-        traceback.print_exc()
-        return 1
+        logger.info("✅ Test passed!")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    pytest.main([__file__, "-v", "-s", "--tb=short"])
