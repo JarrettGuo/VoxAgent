@@ -9,8 +9,6 @@
 import time
 from typing import TYPE_CHECKING, Dict, Any, Optional, List, Callable
 
-from scripts.regsetup import description
-
 from src.core.agent.agents.base_agent import BaseAgent
 from src.core.agent.agents.error_analyzer_agent import ErrorAnalyzerAgent
 from src.core.agent.agents.planner_agent import PlannerAgent
@@ -389,7 +387,6 @@ class CommandProcessor:
         )
 
         execution_result = self._execute_plan(execution_plan)
-
 
         if self._is_execution_successful(execution_result):
             self._finish_execution(latest_input, execution_plan, execution_result)
