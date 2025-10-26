@@ -28,7 +28,7 @@ VoxAgent 是一个基于 LangChain/LangGraph 的智能语音桌面助手，结�
 
 ---
 
-## 🚀 快速开始
+## 快速开始
 
 ### 系统要求
 
@@ -283,180 +283,553 @@ Summary Agent 处理 → 结果 → EdgeTTS → 扬声器（输出）
 
 ### 核心模块规格
 
-#### BaseAgent - Agent 基类
+#### 1. BaseAgent - Agent 基类（Gregfujie）
 
-**职责：**
+**职责:**
 
 - Agent 自动注册机制
 - 平台兼容性检查
 - 工具依赖验证
 - LangChain AgentExecutor 封装
+- 对话历史管理
 
-**关键特性：**
+**关键特性:**
 
 ```python
 class BaseAgent(Runnable, ABC):
-    # 子类必须定义
+    # 子类必须定义的类属性
     agent_name: ClassVar[str]
     agent_description: ClassVar[str]
     agent_system_prompt: ClassVar[str]
 
     # 自动注册装饰器
     def __init_subclass__(
-            agent_type: str,
-            priority: int,
-            platforms: Optional[List[str]],
-            required_tools: Optional[List[str]]
+            agent_type: str,  # Agent 类型标识
+            priority: int,  # 优先级(0-100)
+            platforms: Optional[List[str]],  # 支持的平台
+            required_tools: Optional[List[str]]  # 必需工具
     )
 ```
 
-**优势：**
+**核心方法:**
 
-1. **零配置注册**：继承即自动注册，无需手动管理
-2. **平台适配**：自动检查 macOS/Linux/Windows 兼容性
-3. **依赖检查**：启动时验证所需工具是否可用
-4. **松耦合设计**：每个 Agent 可使用不同的 LLM 和工具配置
-5. **易于扩展**：新增 Agent 只需几行代码
+| 方法                                    | 说明                   |
+|---------------------------------------|----------------------|
+| `__init__(llm, tool_manager, config)` | 初始化 Agent,绑定 LLM 和工具 |
+| `generate_system_prompt(tools)`       | 动态生成系统提示词            |
+| `run(user_input)`                     | 执行任务(同步)             |
+| `arun(user_input)`                    | 执行任务(异步)             |
+| `reset_conversation()`                | 重置对话历史               |
+| `create_all_agents()`                 | 工厂方法,批量创建 Agent      |
 
-#### CommandProcessor - 指令处理器
+**优势:**
 
-**职责：**
+1. **零配置注册** — 继承即自动注册,无需手动管理
+2. **平台适配** — 自动检测 OS,仅加载兼容的 Agent
+3. **依赖检查** — 启动时验证所需工具是否可用
+4. **松耦合设计** — 每个 Agent 可使用不同的 LLM 和工具配置
+5. **易于扩展** — 新增 Agent 只需 10 行代码
+
+**使用示例:**
+
+```python
+class SearchAgent(
+    BaseAgent,
+    agent_type="search",
+    priority=80,
+    platforms=["darwin", "linux", "windows"],
+    required_tools=["wikipedia_search", "duckduckgo_search"]
+):
+    agent_name = "search_agent"
+    agent_description = "信息检索专家"
+    agent_system_prompt = "你是一个信息检索专家..."
+```
+
+---
+
+#### 2. PlannerAgent - 任务规划器（JarrettGuo）
+
+**职责:**
+
+- 理解用户自然语言意图
+- 分析任务可行性
+- 生成结构化执行计划
+- 处理多轮对话上下文
+
+**输入/输出格式:**
+
+**输入:**
+
+- `user_query`: 用户查询文本
+- `conversation_history`: 可选的对话历史
+
+**输出 (PlannerOutput):**
+
+```json
+{
+  "task": "用户真实意图",
+  "feasibility": "feasible|infeasible|invalid_input",
+  "reason": "可行性说明",
+  "steps": [
+    {
+      "step_number": 1,
+      "assigned_agent": "file",
+      "description": "创建文件",
+      "expected_result": "文件创建成功"
+    }
+  ]
+}
+```
+
+**核心特性:**
+
+- 使用 Qwen3-Max 进行复杂推理
+- 支持对话历史理解(确认词识别、纠正检测)
+- 自动识别语音识别错误
+- JSON 结构化输出
+
+**关键方法:**
+
+| 方法                                            | 说明              |
+|-----------------------------------------------|-----------------|
+| `plan(user_query, conversation_history)`      | 异步生成计划          |
+| `plan_sync(user_query, conversation_history)` | 同步生成计划          |
+| `_parse_response(response)`                   | 解析 LLM 响应为结构化计划 |
+| `_convert_to_execution_plan(planner_output)`  | 转换为执行计划         |
+
+---
+
+#### 3. TaskOrchestrator - 任务编排器（Gregfujie）
+
+**职责:**
+
+- 基于 LangGraph 管理执行流程
+- 状态机控制任务流转
+- Agent 调度与协调
+- 执行结果汇总
+
+**LangGraph 工作流:**
+
+```python
+workflow = StateGraph(ExecutionState)
+
+# 定义节点
+workflow.add_node("initialize", initialize_execution)
+workflow.add_node("execute_step", execute_step)
+workflow.add_node("finalize", finalize_execution)
+
+# 设置流程
+workflow.set_entry_point("initialize")
+workflow.add_edge("initialize", "execute_step")
+workflow.add_conditional_edges(
+    "execute_step",
+    route_after_execution,
+    {
+        "next_step": "execute_step",  # 继续执行
+        "all_done": "finalize",  # 完成
+        "error": "finalize"  # 错误
+    }
+)
+```
+
+**状态定义 (ExecutionState):**
+
+```python
+class ExecutionState(BaseModel):
+    plan: Dict[str, Any]  # 执行计划
+    steps: List[StepState]  # 步骤状态列表
+    current_step_index: int  # 当前步骤索引
+    execution_results: List[Dict]  # 执行结果
+    completed: bool  # 是否完成
+    error_message: str  # 错误信息
+```
+
+**执行流程:**
+
+1. **初始化** — 将计划转换为步骤状态
+2. **执行步骤** — 路由到对应 Agent → 执行工具 → 收集结果
+3. **路由决策** — 判断继续/完成/错误
+4. **完成总结** — 汇总所有步骤结果
+
+**核心方法:**
+
+| 方法                              | 说明        |
+|---------------------------------|-----------|
+| `execute(plan)`                 | 执行完整计划    |
+| `_initialize_execution(state)`  | 初始化执行状态   |
+| `_execute_step(state)`          | 执行单个步骤    |
+| `_route_after_execution(state)` | 路由决策      |
+| `_finalize_execution(state)`    | 完成执行并生成摘要 |
+
+---
+
+#### 4. ToolRegistry - 工具注册中心（JarrettGuo）
+
+**职责:**
+
+- 集中管理所有工具
+- 动态工具注册与发现
+- 按类别组织工具
+- 平台特定工具加载
+
+**支持的工具类别:**
+
+| 类别         | 工具                                                                                                     | 数量 |
+|------------|--------------------------------------------------------------------------------------------------------|----|
+| 文件操作       | file_create, file_read, file_write, file_append, file_delete, file_search, file_list, file_find_recent | 8  |
+| 信息检索       | wikipedia_search, duckduckgo_search, google_serper                                                     | 3  |
+| 天气查询       | gaode_weather                                                                                          | 1  |
+| 图像生成       | dalle3, image_download                                                                                 | 2  |
+| 系统控制       | app_control                                                                                            | 1  |
+| macOS 专用   | mail_search, mail_read, music_play, music_control, music_search                                        | 5  |
+| Windows 专用 | outlook_search, outlook_read, pygame_music_play, pygame_music_control                                  | 4  |
+
+**核心方法:**
+
+| 方法                                | 说明        |
+|-----------------------------------|-----------|
+| `register(tool, name)`            | 注册单个工具    |
+| `get_tool(tool_name)`             | 获取工具实例    |
+| `get_tools_by_names(names)`       | 批量获取工具    |
+| `get_tools_by_category(category)` | 按类别获取工具   |
+| `get_all_tools()`                 | 获取所有工具    |
+| `has_tool(name)`                  | 检查工具是否存在  |
+| `get_tool_info()`                 | 获取所有工具的信息 |
+
+**使用示例:**
+
+```python
+# 注册工具
+tool_registry.register(wikipedia_search())
+tool_registry.register(gaode_weather(api_key=api_key))
+
+# 获取工具
+tool = tool_registry.get_tool("wikipedia_search")
+
+# 按类别获取
+file_tools = tool_registry.get_tools_by_category("file")
+```
+
+---
+
+#### 5. CommandProcessor - 指令处理器（JarrettGuo）
+
+**职责:**
 
 - 完整的指令处理流程编排
 - 协调音频、对话、执行三大模块
 - 错误处理与恢复
+- 系统初始化管理
 
-**核心流程：**
+**处理流程 (8 步):**
 
 ```python
 def process_command():
     # 1. 录音
     audio_data = audio_handler.record_audio()
 
-    # 2. 识别
+    # 2. 语音识别
     text = audio_handler.transcribe_audio(audio_data)
 
     # 3. 对话管理
     conversation_manager.add_user_input(text)
     query = conversation_manager.merge_query()
 
-    # 4. 规划与执行
-    result = plan_executor.plan_and_execute(query)
+    # 4. 任务规划
+    plan = planner.plan_sync(query)
 
-    # 5. 语音反馈
-    tts_client.speak(result)
+    # 5. 任务执行
+    result = orchestrator.execute(plan)
+
+    # 6. 结果总结
+    summary = summarizer.summarize_sync(query, result)
+
+    # 7. 语音反馈
+    tts_client.speak(summary)
+
+    # 8. 状态重置
+    conversation_manager.reset()
 ```
 
-#### ConversationManager - 对话管理器
+**核心组件:**
 
-**职责：**
+| 组件                    | 职责      |
+|-----------------------|---------|
+| `AudioHandler`        | 录音与语音识别 |
+| `ConversationManager` | 对话上下文管理 |
+| `PlannerAgent`        | 任务规划    |
+| `TaskOrchestrator`    | 任务执行    |
+| `SummaryAgent`        | 结果总结    |
+| `ErrorHandler`        | 错误分析与处理 |
+| `TTSClient`           | 语音合成    |
+
+**关键方法:**
+
+| 方法                                    | 说明      |
+|---------------------------------------|---------|
+| `process_command()`                   | 处理单次指令  |
+| `_initialize_system()`                | 初始化所有组件 |
+| `_handle_new_query(text)`             | 处理新查询   |
+| `_handle_conversation_followup(text)` | 处理对话跟进  |
+| `_execute_plan(query, plan)`          | 执行计划    |
+
+---
+
+#### 6. ConversationManager - 对话管理器（JarrettGuo）
+
+**职责:**
 
 - 多轮对话上下文管理
 - 对话历史合并与理解
-- 重试逻辑
+- 重试逻辑控制
+- 识别确认/纠正/补充
 
-**核心功能：**
+**状态管理:**
+
+```python
+state = {
+    "active": False,  # 是否在对话中
+    "retry_count": 0,  # 重试次数
+    "original_query": None,  # 原始查询
+    "messages": []  # 消息历史
+}
+```
+
+**核心功能:**
 
 ```python
 def merge_query() -> str:
-# 综合分析对话历史
-# 识别确认词："是"、"对"
-# 识别纠正："不是"、"错了"
-# 识别补充：新信息
-# 识别语音识别错误
+    """综合分析对话历史"""
+    # 1. 识别确认词："是"、"对"、"是的"
+    # 2. 识别纠正："不是"、"错了"  
+    # 3. 识别补充：新信息
+    # 4. 识别语音识别错误
+    # 5. 生成合并后的查询
 ```
 
-**示例：**
+**使用示例:**
 
 ```
 User: 帮我查询保鸡盾的天几种话
-AI: 您是想查"波士顿"的天气吗？
+AI: 您是想查"波士顿"的天气吗?
 User: 是的
-→ 系统理解为："查询波士顿的天气"
+→ 系统理解为: "查询波士顿的天气"
 ```
 
-### 执行流程
+**关键方法:**
 
-**完整流程（8 步）：**
+| 方法                          | 说明         |
+|-----------------------------|------------|
+| `start_new_query(text)`     | 开始新查询      |
+| `add_user_input(text)`      | 添加用户输入     |
+| `add_system_response(text)` | 添加系统响应     |
+| `merge_query()`             | 合并对话历史     |
+| `activate_conversation()`   | 激活对话模式     |
+| `needs_more_info(summary)`  | 判断是否需要更多信息 |
+| `reset()`                   | 重置状态       |
+
+---
+
+#### 7. AudioHandler - 音频处理模块（JarrettGuo）
+
+**职责:**
+
+- 动态时长录音
+- 静音检测
+- 语音识别(Whisper)
+- 音频质量验证
+
+**录音特性:**
+
+- **动态时长**: 2-60 秒可配置
+- **静音检测**: 检测到 2 秒静音自动结束
+- **语音检测**: 区分有效语音和噪音
+- **能量分析**: 基于音频能量判断是否有效
+
+**配置参数:**
+
+```python
+recording_config = {
+    "min_duration": 2.0,  # 最短录音时长
+    "max_duration": 60.0,  # 最长录音时长  
+    "silence_threshold": 500.0,  # 静音阈值
+    "silence_duration": 2.0,  # 静音持续时长
+    "speech_threshold": 800.0,  # 语音阈值
+    "min_speech_chunks": 5  # 最少语音块数
+}
+```
+
+**核心方法:**
+
+| 方法                              | 说明         |
+|---------------------------------|------------|
+| `record_audio()`                | 录制音频       |
+| `transcribe_audio(audio_data)`  | 转录音频为文本    |
+| `_has_valid_speech(audio_data)` | 检查是否包含有效语音 |
+
+---
+
+#### 8. ErrorHandler - 错误处理器（JarrettGuo）
+
+**职责:**
+
+- 错误类型识别
+- 用户友好的错误提示生成
+- 降级方案处理
+
+**错误类型 (ErrorType):**
+
+```python
+class ErrorType(str, Enum):
+    MISSING_INFO = "missing_info"  # 缺少必要信息
+    INVALID_PARAM = "invalid_param"  # 参数无效
+    RECOGNITION_ERROR = "recognition_error"  # 识别错误
+    EXECUTION_FAILED = "execution_failed"  # 执行失败
+    UNKNOWN = "unknown"  # 未知错误
+```
+
+**核心方法:**
+
+| 方法                                                    | 说明     |
+|-------------------------------------------------------|--------|
+| `analyze_error(error_message)`                        | 分析错误类型 |
+| `create_friendly_message(error_type, details, query)` | 生成友好提示 |
+| `_create_fallback_message(error_type, error_message)` | 降级方案   |
+
+**使用示例:**
+
+```python
+error_type = error_handler.analyze_error("缺少 city 参数")
+# → ErrorType.MISSING_INFO
+
+message = error_handler.create_friendly_message(
+    error_type=ErrorType.MISSING_INFO,
+    details={"missing": ["city"]},
+    query="查询天气"
+)
+# → "抱歉,查询天气需要提供城市名称。请告诉我您想查询哪个城市的天气?"
+```
+
+#### 9. UI 界面模块（Gregfujie）
+
+VoxAgent 提供了基于 PySide6 (Qt6) 的轻量级桌面界面，采用**浮动图标 + 独立线程**的设计，既不干扰日常工作，又能实时监控助手状态。
+
+---
+
+##### 9.1 FloatingIcon - 浮动图标
+
+**职责：** 桌面常驻的可拖动圆形图标，提供快捷交互入口
+
+**核心特性：**
+
+- **尺寸与外观**：60x60 像素圆形，蓝色背景 + "AI" 白字
+- **窗口属性**：无边框、始终置顶、透明背景
+- **交互方式**：
+    - 左键拖动 → 移动位置
+    - 双击 → 显示/隐藏主窗口
+    - 右键 → 弹出菜单（显示窗口/退出程序）
+
+**设计理念：** 非侵入式设计，小巧图标始终可见但不占用屏幕空间，随时可达。
+
+---
+
+##### 9.2 线程分离架构
+
+**职责：** 通过独立线程运行语音助手，避免阻塞 UI
+
+**架构设计：**
 
 ```
-1. 唤醒检测
-   Porcupine 检测 "computer" → 触发录音
+Main Thread (Qt UI)               Worker Thread
+     │                                 │
+     ├─ FloatingIcon                   ├─ VoiceAssistantWorker
+     ├─ AssistantWindow                │    │
+     │                                 │    └─ VoiceAssistant
+     │         ◄────── Signals ────────┤       (语音识别/LLM/工具)
+     │                                 │
+     └─ UI 渲染、用户交互              └─ 耗时操作
+```
 
-2. 音频录制
-   动态录音（2-60秒）→ 静音 2 秒自动结束
+**关键机制：**
 
-3. 语音识别
-   Whisper 本地识别 → 文本
+```python
+class VoiceAssistantWorker(QObject):
+    # 定义信号
+    message_received = Signal(str)  # 助手消息
+    initialization_complete = Signal(bool)  # 初始化完成
+    status_update = Signal(str)  # 状态更新
 
-4. 对话管理
-   合并对话历史（若开启） → 完整查询
+    def run(self):
+        # 在独立线程中运行语音助手
+        success = self.voice_assistant.initialize()
+        self.initialization_complete.emit(success)
+        self.voice_assistant.run()  # 阻塞式运行
+```
 
-5. 任务规划
-   PlannerAgent → JSON 结构化计划
+**优势：**
 
-6. 任务执行
-   TaskOrchestrator → LangGraph 状态机 → 路由到专业 Agent → 调用工具 → 返回结果 → TaskOrchestrator
+- ✅ **UI 永不卡顿** — 语音识别、LLM 推理等耗时操作在后台线程
+- ✅ **实时反馈** — 通过 Qt Signal/Slot 机制实时更新界面
+- ✅ **安全退出** — 线程等待机制确保资源正确释放
 
-7. 结果总结
-   SummaryAgent → 友好总结
+**线程通信流程：**
 
-8. 语音反馈
-   EdgeTTS → 播放音频
+1. Worker Thread 执行耗时任务
+2. 通过 Signal 发送消息到 Main Thread
+3. Main Thread 的 Slot 接收消息并更新 UI
+4. 用户交互 → Main Thread → 调用 Worker 方法
+
+---
+
+**使用场景：**
+
+- **日常使用** — 浮动图标后台运行，纯语音交互
+- **调试监控** — 双击图标查看对话历史和状态
+- **安全退出** — 右键菜单退出，自动清理线程资源
+
+---
+
+### 模块间协作流程
+
+```
+┌─────────────────────────────────────────────────────┐
+│              CommandProcessor                        │
+│  (总指挥 - 编排整个处理流程)                          │
+└──────────────┬──────────────────────────────────────┘
+               │
+               ├──▶ AudioHandler (录音 + 识别)
+               │
+               ├──▶ ConversationManager (对话管理)
+               │
+               ├──▶ PlannerAgent (任务规划)
+               │         │
+               │         ▼
+               ├──▶ TaskOrchestrator (任务编排)
+               │         │
+               │         ├──▶ BaseAgent (工作 Agent)
+               │         │      │
+               │         │      ▼
+               │         │   ToolRegistry (工具调用)
+               │         │
+               │         ▼
+               │    [执行结果]
+               │
+               ├──▶ SummaryAgent (结果总结)
+               │
+               ├──▶ ErrorHandler (错误处理)
+               │
+               └──▶ TTSClient (语音反馈)
 ```
 
 ---
 
-## 实现挑战与解决方案
+### 设计原则总结
 
-### 挑战 1：设计合适的 LangGraph 调用链
-
-**问题描述：**
-
-- 如何设计清晰的 Agent 协作流程？
-- 如何避免循环依赖和状态混乱？
-- 如何平衡复杂度和灵活性？
-
-**我们的解决方案：**
-
-**1. 分层架构 - 职责分离**
-
-```
-Planner (规划) → Orchestrator (协调) → Workers (执行)
-```
-
-- **Planner**：只负责理解意图和生成计划，不执行具体任务
-- **Orchestrator**：基于 LangGraph 管理状态转换，协调 Agent 调用
-- **Workers**：专业 Agent 各司其职，只关注自己的领域
-
-**2. 状态机设计 - 清晰的流程控制**
-
-```python
-workflow = StateGraph(ExecutionState)
-workflow.add_node("initialize", initialize_execution)
-workflow.add_node("execute_step", execute_step)
-workflow.add_node("finalize", finalize_execution)
-
-workflow.set_entry_point("initialize")
-workflow.add_edge("initialize", "execute_step")
-workflow.add_conditional_edges(
-    "execute_step",
-    should_continue,  # 判断是否继续
-    {"continue": "execute_step", "end": "finalize"}
-)
-```
-
-**3. 通过测试和 LangSmith 监控优化**
-
-- 使用 LangSmith 追踪每个 Agent 的执行情况
-- 识别瓶颈和错误模式
-- 迭代优化 Prompt 和流程设计
-
-**成果：**
-
-- ✅ 清晰的三层架构，易于理解和维护
-- ✅ 状态转换明确，没有循环依赖
-- ✅ 通过 50+ 测试用例验证稳定性
+1. **单一职责** — 每个模块只负责一项核心功能
+2. **松耦合** — 模块间通过接口交互,易于替换和测试
+3. **可扩展** — 通过继承和注册机制轻松添加新功能
+4. **容错性** — 完善的错误处理和降级方案
+5. **可监控** — 集成 LangSmith 实现全链路追踪
 
 ### 挑战 2：代码易于扩展，便于后期新增功能
 
