@@ -50,3 +50,8 @@ class PygameSearchSchema(BaseModel):
     query: str = Field(description="搜索关键词（歌曲名、歌手或专辑）")
     limit: int = Field(default=5, description="返回结果数量")
 
+class PygameFetchSchema(BaseModel):
+    """音乐获取参数"""
+    query: Optional[str] = Field(description="搜索关键词（歌曲名、歌手或专辑）(可选)")
+    limit: int = Field(default=10, description="返回结果数量")
+

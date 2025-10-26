@@ -16,7 +16,7 @@ def mock_agent():
     llm = ChatOpenAI(
         api_key=qiniu_config.get("api_key"),
         base_url=qiniu_config.get("base_url"),
-        model=qiniu_config.get("llm", {}).get("model", "gpt-4o-mini"),
+        model=qiniu_config.get("llm", {}).get("model", "qwen3-next-80b-a3b-instruct"),
         temperature=qiniu_config.get("llm", {}).get("temperature", 0.7),
         max_tokens=qiniu_config.get("llm", {}).get("max_tokens", 2000),
     )

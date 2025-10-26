@@ -29,6 +29,24 @@ class TestWindowsTools:
 
         assert "搜索结果" in result or "未找到" in result or "无法启动" in result
 
+    def test_music_fetch(self):
+        """测试音乐搜索"""
+        tool = tool_registry.get_tool("pygame_music_fetch")
+        result = tool._run(limit=5)
+        logger.info(f"搜索结果:\n{result}")
+
+        assert "获取结果" in result or "未找到" in result or "获取失败" in result
+
+        result = tool._run(query="夜曲", limit=5)
+        logger.info(f"搜索结果:\n{result}")
+
+        assert "获取结果" in result or "未找到" in result or "获取失败" in result
+
+        result = tool._run(query="天天", limit=5)
+        logger.info(f"获取结果:\n{result}")
+
+        assert "获取结果" in result or "未找到" in result or "获取失败" in result
+
     def test_music_search_multiple_queries(self):
         """测试多个搜索关键词"""
         tool = tool_registry.get_tool("pygame_music_search")
