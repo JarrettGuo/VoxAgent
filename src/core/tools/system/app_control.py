@@ -5,7 +5,7 @@
 @Author : guojarrett@gmail.com
 @File   : app_control.py
 """
-
+import os
 import platform
 import subprocess
 from typing import Any, Type, Dict, ClassVar
@@ -29,7 +29,7 @@ class AppControlTool(BaseTool):
             "Darwin": "Google Chrome",
             "Windows": {
                 "exe": "chrome.exe",
-                "path": r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+                "path":  os.path.join(os.environ["ProgramFiles"], "Google", "Chrome", "Application", "chrome.exe")
             },
             "Linux": "google-chrome"
         },
@@ -37,7 +37,7 @@ class AppControlTool(BaseTool):
             "Darwin": "Google Chrome",
             "Windows": {
                 "exe": "chrome.exe",
-                "path": r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+                "path":  os.path.join(os.environ["ProgramFiles"], "Google", "Chrome", "Application", "chrome.exe")
             },
             "Linux": "google-chrome"
         },
@@ -69,7 +69,7 @@ class AppControlTool(BaseTool):
             "Darwin": "Visual Studio Code",
             "Windows": {
                 "exe": "Code.exe",
-                "path": r"C:\Users\17994\AppData\Local\Programs\Microsoft VS Code"
+                "path": os.path.join(os.environ["LOCALAPPDATA"], "Programs", "Microsoft VS Code")
             },
             "Linux": "code"
         },

@@ -88,6 +88,9 @@ class ToolRegistry:
         if platform.system() == "Darwin":
             self._register_macos_tools()
 
+        if platform.system() == "Windows":
+            self._register_windows_tools()
+
     def register(self, tool: BaseTool, name: Optional[str] = None) -> None:
         """注册工具"""
         # 自动从 tool 对象获取名称
@@ -147,9 +150,11 @@ class ToolRegistry:
             ],
             "search": ["duckduckgo_search", "wikipedia_search"],
             "weather": ["gaode_weather"],
-            "image": ["dalle3"],
-            "macos_mail": ["mail_search", "mail_read", "mail_send"],
+            "image": ["dalle3", "download_image"],
+            "macos_mail": ["mail_search", "mail_read"],
             "macos_music": ["music_play", "music_control", "music_search"],
+            "windows_mail": ["outlook_search", "outlook_read"],
+            "windows_music": ["pygame_music_play", "pygame_music_control", "pygame_music_search"],
         }
 
         tool_names = category_map.get(category, [])
@@ -176,7 +181,7 @@ class ToolRegistry:
             # 邮件工具
             self.register(mail_search())
             self.register(mail_read())
-            self.register(mail_send())
+            # self.register(mail_send())
 
             # 音乐工具
             self.register(music_play())
@@ -187,6 +192,29 @@ class ToolRegistry:
 
         except Exception as e:
             logger.warning(f"macOS tools registration failed: {e}")
+
+    def _register_windows_tools(self):
+        """注册 macOS 专用工具"""
+        try:
+            from src.core.tools.system.windows import (
+                outlook_send, outlook_read, outlook_search,
+                pygame_music_search, pygame_music_play, pygame_music_control
+            )
+
+            # 邮件工具
+            self.register(outlook_search())
+            self.register(outlook_read())
+            # self.register(outlook_send())
+
+            # 音乐工具
+            self.register(pygame_music_search())
+            self.register(pygame_music_play())
+            self.register(pygame_music_control())
+
+            logger.info("windows tools registered")
+
+        except Exception as e:
+            logger.warning(f"windows tools registration failed: {e}")
 
 
 # 全局工具注册中心实例
