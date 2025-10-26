@@ -887,7 +887,7 @@ def get_platform_app_name(agent_type: str, platform: str = None) -> str:
     app_names = {
         'music': {
             'mac': 'Apple Music',
-            'windows': 'Windows Media Player',
+            'windows': 'Pygame Player',
             'linux': '音乐播放器'
         },
         'mail': {

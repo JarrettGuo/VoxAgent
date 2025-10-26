@@ -69,7 +69,7 @@ class MusicSearchTool(BaseMusicTool):
     """音乐搜索工具"""
 
     name: str = "pygame_music_search"
-    description: str = "搜索歌曲"
+    description: str = "搜索歌曲，必须先查询歌单后再使用"
     args_schema: Type[PygameSearchSchema] = PygameSearchSchema
 
     def _run(self, query: str, limit: int = 5, **kwargs: Any) -> str:
@@ -100,7 +100,7 @@ class MusicFetchTool(BaseMusicTool):
     """音乐搜索工具"""
 
     name: str = "pygame_music_fetch"
-    description: str = "获取本地音乐库中的歌曲列表或根据歌名查询相近歌曲"
+    description: str = "获取本地音乐库中的歌曲列表或根据歌名查询相近歌曲, 无论什么情况都先获取歌曲列表再确认搜索歌名"
     args_schema: Type[PygameFetchSchema] = PygameFetchSchema
 
     def _run(self, limit: int = 10, query: Optional[str] = None) -> str:
