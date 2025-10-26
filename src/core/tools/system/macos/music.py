@@ -121,7 +121,7 @@ class MusicSearchTool(MacOSBaseTool):
             if not self._ensure_app_running("Music"):
                 return "无法启动 Music 应用"
 
-            # 修复 AppleScript 语法
+            # AppleScript 语法
             script = f'''
             tell application "Music"
                 set searchResults to (search playlist 1 for "{query}")

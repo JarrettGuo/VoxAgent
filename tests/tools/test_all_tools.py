@@ -10,11 +10,10 @@ from src.core.tools import tool_registry
 from src.utils.logger import logger
 
 
-# tests/tools/test_all_tools.py
 def test_all_tools():
     """测试所有已注册的工具"""
     # 显示所有已注册的工具
-    tool_names = tool_registry.get_tool_names()
+    tool_names = tool_registry.get_all_tool_names()
     logger.info(f"\n已注册工具 ({len(tool_names)} 个):")
     for name in tool_names:
         logger.info(f"   - {name}")
@@ -22,7 +21,7 @@ def test_all_tools():
     # 测试 DuckDuckGo 搜索
     logger.info("\n测试 DuckDuckGo 搜索")
     try:
-        tool = tool_registry.get("duckduckgo_search")
+        tool = tool_registry.get_tool("duckduckgo_search")
         result = tool._run(query="Python programming")
         logger.info(f"Result: {result[:200]}...")
     except ValueError as e:
@@ -47,7 +46,7 @@ def test_all_tools():
     logger.info("测试高德天气")
     logger.info("=" * 60)
     try:
-        tool = tool_registry.get("gaode_weather")
+        tool = tool_registry.get_tool("gaode_weather")
         result = tool._run(city="北京")
         logger.info(f"结果:\n{result}")
     except ValueError as e:

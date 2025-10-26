@@ -11,6 +11,7 @@ import os
 import shutil
 import tempfile
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -41,7 +42,8 @@ class TestFileOperations:
         test_file = os.path.join(self.test_dir, "create_test.txt")
         test_content = "Hello, VoxAgent!"
 
-        tool = tool_registry.get("file_create")
+        # 使用新的 registry API
+        tool = tool_registry.get_tool("file_create")
         result = tool._run(file_path=test_file, content=test_content)
 
         logger.info(f"结果: {result}")
@@ -70,7 +72,7 @@ class TestFileOperations:
             f.write(test_content)
 
         # 读取文件
-        tool = tool_registry.get("file_read")
+        tool = tool_registry.get_tool("file_read")
         result = tool._run(file_path=test_file)
 
         logger.info(f"结果: {result}")
@@ -94,7 +96,7 @@ class TestFileOperations:
 
         # 使用 file_write 覆盖
         new_content = "New content"
-        tool = tool_registry.get("file_write")
+        tool = tool_registry.get_tool("file_write")
         result = tool._run(file_path=test_file, content=new_content)
 
         logger.info(f"结果: {result}")
@@ -122,7 +124,7 @@ class TestFileOperations:
 
         # 追加内容
         append_content = "Line 2\n"
-        tool = tool_registry.get("file_append")
+        tool = tool_registry.get_tool("file_append")
         result = tool._run(file_path=test_file, content=append_content)
 
         logger.info(f"结果: {result}")
@@ -151,7 +153,7 @@ class TestFileOperations:
         assert os.path.exists(test_file), "测试文件未创建"
 
         # 删除文件
-        tool = tool_registry.get("file_delete")
+        tool = tool_registry.get_tool("file_delete")
         result = tool._run(file_path=test_file)
 
         logger.info(f"结果: {result}")
@@ -159,8 +161,6 @@ class TestFileOperations:
         # 验证文件已删除
         assert not os.path.exists(test_file), "文件未被删除"
         logger.info("测试通过: file_delete")
-
-    # ==================== file_search 测试 ====================
 
     def test_file_search(self):
         """测试 file_search：搜索文件"""
@@ -181,7 +181,7 @@ class TestFileOperations:
                 f.write(f"Content of {filename}")
 
         # 搜索包含 "report" 的文件
-        tool = tool_registry.get("file_search")
+        tool = tool_registry.get_tool("file_search")
         result = tool._run(
             query="report",
             search_path=self.test_dir,
@@ -196,8 +196,6 @@ class TestFileOperations:
         assert "meeting_notes.txt" not in result, "不应该找到 meeting_notes.txt"
 
         logger.info("测试通过: file_search")
-
-    # ==================== file_list 测试 ====================
 
     def test_file_list(self):
         """测试 file_list：列出目录内容"""
@@ -218,7 +216,7 @@ class TestFileOperations:
             os.makedirs(os.path.join(self.test_dir, dirname), exist_ok=True)
 
         # 列出目录内容
-        tool = tool_registry.get("file_list")
+        tool = tool_registry.get_tool("file_list")
         result = tool._run(directory=self.test_dir)
 
         logger.info(f"结果:\n{result}")
@@ -251,7 +249,7 @@ class TestFileOperations:
         os.utime(old_file, (old_time, old_time))
 
         # 查找最近7天的文件
-        tool = tool_registry.get("file_find_recent")
+        tool = tool_registry.get_tool("file_find_recent")
         result = tool._run(
             directory=self.test_dir,
             days=7
@@ -265,41 +263,151 @@ class TestFileOperations:
 
         logger.info("测试通过: file_find_recent")
 
+    def test_create_file_on_desktop(self):
+        """✨ 测试在桌面创建 test.doc 文件（不删除）"""
+        logger.info("\n" + "=" * 60)
+        logger.info("测试在桌面创建 test.doc")
+        logger.info("=" * 60)
+
+        # 获取桌面路径
+        desktop_path = Path.home() / "Desktop"
+        test_file = desktop_path / "test.doc"
+
+        logger.info(f"目标文件路径: {test_file}")
+
+        # 检查桌面是否存在
+        if not desktop_path.exists():
+            logger.warning(f"⚠️  桌面目录不存在: {desktop_path}")
+            logger.info("跳过此测试")
+            pytest.skip("Desktop directory does not exist")
+            return
+
+        # 测试内容
+        test_content = """这是一个测试文档
+
+创建时间：{datetime}
+用途：测试 VoxAgent 文件创建功能
+
+内容：
+- 第一行测试内容
+- 第二行测试内容
+- 第三行测试内容
+
+测试成功！
+""".format(datetime=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+        # 如果文件已存在，先删除（避免"文件已存在"错误）
+        if test_file.exists():
+            logger.info(f"文件已存在，先删除: {test_file}")
+            test_file.unlink()
+
+        # 使用工具创建文件
+        tool = tool_registry.get_tool("file_create")
+        result = tool._run(
+            file_path=str(test_file),
+            content=test_content
+        )
+
+        logger.info(f"工具返回结果: {result}")
+
+        # 验证文件创建
+        assert test_file.exists(), f"文件未创建: {test_file}"
+
+        # 验证文件大小
+        file_size = test_file.stat().st_size
+        logger.info(f"文件大小: {file_size} bytes")
+        assert file_size > 0, "文件为空"
+
+        # 读取并验证内容
+        with open(test_file, 'r', encoding='utf-8') as f:
+            actual_content = f.read()
+
+        assert actual_content == test_content, "文件内容不匹配"
+
+        # ✅ 成功信息（文件不会被删除）
+        logger.info("=" * 60)
+        logger.info("✅ 测试通过: 在桌面创建 test.doc")
+        logger.info(f"📄 文件位置: {test_file}")
+        logger.info(f"📊 文件大小: {file_size} bytes")
+        logger.info("⚠️  注意: 此文件不会被自动删除")
+        logger.info("=" * 60)
+
 
 def test_all():
     """运行所有测试"""
-    test = TestFileOperations()
+    logger.info("\n" + "=" * 70)
+    logger.info("开始运行所有测试")
+    logger.info("=" * 70)
 
-    tests = [
-        ("file_create", test.test_file_create),
-        ("file_read", test.test_file_read),
-        ("file_write", test.test_file_write),
-        ("file_append", test.test_file_append),
-        ("file_delete", test.test_file_delete),
-        ("file_search", test.test_file_search),
-        ("file_list", test.test_file_list),
-        ("file_find_recent", test.test_file_find_recent),
+    # 文件操作测试
+    file_ops_test = TestFileOperations()
+    file_ops_tests = [
+        ("file_create", file_ops_test.test_file_create),
+        ("file_read", file_ops_test.test_file_read),
+        ("file_write", file_ops_test.test_file_write),
+        ("file_append", file_ops_test.test_file_append),
+        ("file_delete", file_ops_test.test_file_delete),
+        ("file_search", file_ops_test.test_file_search),
+        ("file_list", file_ops_test.test_file_list),
+        ("file_find_recent", file_ops_test.test_file_find_recent),
+        ("create_on_desktop", file_ops_test.test_create_file_on_desktop),  # ✨ 新增
     ]
 
     passed = 0
     failed = 0
+    failed_tests = []
 
-    for name, test_func in tests:
-        test.setup_method()
+    # 运行文件操作测试
+    logger.info("\n" + "=" * 70)
+    logger.info("📁 文件操作测试")
+    logger.info("=" * 70)
+
+    for name, test_func in file_ops_tests:
+        # ✨ 桌面测试不需要 setup/teardown
+        if name != "create_on_desktop":
+            file_ops_test.setup_method()
+
         try:
             test_func()
             passed += 1
+            logger.info(f"✅ {name} - 通过")
         except Exception as e:
             failed += 1
-            logger.error(f"测试失败 {name}: {e}")
+            failed_tests.append(name)
+            logger.error(f"❌ {name} - 失败: {e}")
+            import traceback
+            traceback.print_exc()
         finally:
-            test.teardown_method()
+            # ✨ 桌面测试不需要清理
+            if name != "create_on_desktop":
+                file_ops_test.teardown_method()
 
-    logger.info("\n" + "=" * 60)
-    logger.info(f"测试完成: {passed} 通过, {failed} 失败")
-    logger.info("=" * 60)
+    # 汇总结果
+    logger.info("\n" + "=" * 70)
+    logger.info("📊 测试汇总")
+    logger.info("=" * 70)
+    logger.info(f"总计: {passed + failed} 个测试")
+    logger.info(f"✅ 通过: {passed}")
+    logger.info(f"❌ 失败: {failed}")
+
+    if failed_tests:
+        logger.info("\n失败的测试:")
+        for test in failed_tests:
+            logger.info(f"   - {test}")
+
+    logger.info("=" * 70)
+
+    return passed, failed
 
 
 if __name__ == "__main__":
-    # 运行所有测试
-    pytest.main([__file__, "-v", "-s"])
+    # 可以选择运行 pytest 或自定义测试
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--pytest":
+        # 使用 pytest 运行
+        pytest.main([__file__, "-v", "-s"])
+    else:
+        # 使用自定义测试运行器
+        passed, failed = test_all()
+        sys.exit(0 if failed == 0 else 1)

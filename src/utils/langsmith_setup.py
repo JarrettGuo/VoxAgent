@@ -7,7 +7,6 @@
 """
 
 import os
-from typing import Optional
 
 from src.utils.config import config
 from src.utils.logger import logger
@@ -57,16 +56,6 @@ class LangSmithManager:
         except Exception as e:
             logger.error(f"Failed to initialize LangSmith: {e}")
             return False
-
-    @classmethod
-    def get_project_name(cls) -> Optional[str]:
-        """获取当前项目名称"""
-        return config.get("langsmith.project", "voxagent-default")
-
-    @classmethod
-    def is_enabled(cls) -> bool:
-        """检查是否已启用"""
-        return cls._initialized
 
 
 # 全局初始化函数

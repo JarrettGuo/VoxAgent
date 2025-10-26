@@ -1,7 +1,12 @@
-from src.utils.logger import logger
-from typing import Dict, Any
-from abc import ABC, abstractmethod
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import time
+from abc import ABC, abstractmethod
+from typing import Dict, Any
+
+from src.utils.logger import logger
+
 
 class BaseAgent(ABC):
     """基础Agent接口"""
@@ -201,6 +206,7 @@ class MockDatabaseAgent(BaseAgent):
             "message": f"Database operation: {task_description}",
             "success": True
         }
+
 
 if __name__ == "__main__":
     print("\n" + "=" * 60)

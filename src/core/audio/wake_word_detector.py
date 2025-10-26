@@ -24,7 +24,8 @@ class WakeWordDetector:
             access_key: str,
             keywords: list[str],
             sensitivities: Optional[list[float]] = None,
-            on_wake: Optional[Callable[[int], None]] = None
+            on_wake: Optional[Callable[[int], None]] = None,
+            pa_instance: Optional[pyaudio.PyAudio] = None,
     ):
         """初始化唤醒词检测器"""
         self.keywords = keywords
@@ -38,12 +39,19 @@ class WakeWordDetector:
                 keywords=keywords,
                 sensitivities=sensitivities or [0.5] * len(keywords)
             )
-            logger.info(f"   Wake Word: {', '.join(keywords)}")
+            logger.info(f"Wake Word: {', '.join(keywords)}")
         except Exception as e:
-            logger.error(f"❌ Initializing Porcupine failed: {e}")
+            logger.error(f"Initializing Porcupine failed: {e}")
             raise
 
-        self.pa = pyaudio.PyAudio()
+        if pa_instance is not None:
+            self.pa = pa_instance
+            self._owns_pa = False
+            logger.debug("Using shared PyAudio instance")
+        else:
+            self.pa = pyaudio.PyAudio()
+            self._owns_pa = True
+            logger.debug("Created new PyAudio instance")
         self.stream: Optional[pyaudio.Stream] = None
 
     def _open_audio_stream(self):
@@ -57,7 +65,7 @@ class WakeWordDetector:
                 frames_per_buffer=self.porcupine.frame_length
             )
         except Exception as e:
-            logger.error(f"❌ Failed to open audio stream: {e}")
+            logger.error(f"Failed to open audio stream: {e}")
             raise
 
     def _close_audio_stream(self):
@@ -68,7 +76,7 @@ class WakeWordDetector:
                     self.stream.stop_stream()
                 self.stream.close()
             except Exception as e:
-                logger.warning(f"⚠️  Error closing stream: {e}")
+                logger.warning(f"Error closing stream: {e}")
             finally:
                 self.stream = None
 
@@ -84,8 +92,8 @@ class WakeWordDetector:
 
             self._is_running = True
             self._is_paused = False
-            logger.info("🎤 Started listening for wake words...")
-            logger.info(f"   Try saying: {', '.join(self.keywords)}")
+            logger.info("Started listening for wake words...")
+            logger.info(f"Try saying: {', '.join(self.keywords)}")
 
             while self._is_running:
                 # 如果暂停,跳过处理但继续循环
@@ -110,7 +118,7 @@ class WakeWordDetector:
 
                     if keyword_index >= 0:
                         detected_keyword = self.keywords[keyword_index]
-                        logger.info(f"🔔 Detected wake word: '{detected_keyword}'")
+                        logger.info(f"Detected wake word: '{detected_keyword}'")
 
                         # 触发回调
                         if self.on_wake:
@@ -121,13 +129,13 @@ class WakeWordDetector:
                     if self._is_paused:
                         continue
                     else:
-                        logger.error(f"❌ Audio stream error: {e}")
+                        logger.error(f"Audio stream error: {e}")
                         break
 
         except KeyboardInterrupt:
-            logger.info("\n👋 Detected KeyboardInterrupt, stopping...")
+            logger.info("\nDetected KeyboardInterrupt, stopping...")
         except Exception as e:
-            logger.error(f"❌ Error during wake word detection: {e}")
+            logger.error(f"Error during wake word detection: {e}")
         finally:
             self.stop()
 
@@ -139,7 +147,7 @@ class WakeWordDetector:
         self._is_paused = True
 
         self._close_audio_stream()
-        logger.debug("⏸️  Wake word detection paused (stream closed)")
+        logger.debug("Wake word detection paused (stream closed)")
 
     def resume(self):
         """恢复唤醒词检测，重新创建音频流"""
@@ -158,10 +166,10 @@ class WakeWordDetector:
             self.stream = self._open_audio_stream()
 
             self._is_paused = False
-            logger.debug("▶️  Wake word detection resumed (stream recreated)")
+            logger.debug("Wake word detection resumed (stream recreated)")
 
         except Exception as e:
-            logger.error(f"❌ Failed to resume wake word detection: {e}")
+            logger.error(f"Failed to resume wake word detection: {e}")
             self._is_paused = True  # 保持暂停状态
 
     def stop(self):
@@ -170,7 +178,7 @@ class WakeWordDetector:
         self._is_paused = False
 
         self._close_audio_stream()
-        logger.info("🛑 Stopped listening for wake words.")
+        logger.info("Stopped listening for wake words.")
 
     def cleanup(self):
         """清理资源"""
@@ -179,16 +187,16 @@ class WakeWordDetector:
         if self.porcupine:
             try:
                 self.porcupine.delete()
-                logger.info("🧹 Porcupine resources released")
+                logger.info("Porcupine resources released")
             except Exception as e:
-                logger.error(f"❌ Releasing Porcupine resources failed: {e}")
+                logger.error(f"Releasing Porcupine resources failed: {e}")
 
-        if self.pa:
+        if self._owns_pa and self.pa:
             try:
                 self.pa.terminate()
-                logger.info("🧹 PyAudio resources released")
+                logger.info("PyAudio resources released")
             except Exception as e:
-                logger.error(f"❌ Releasing PyAudio resources failed: {e}")
+                logger.error(f"Releasing PyAudio resources failed: {e}")
 
     def __enter__(self):
         return self

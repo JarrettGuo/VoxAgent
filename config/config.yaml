@@ -1,5 +1,3 @@
-# 语音助手配置文件
-
 # 音频设置
 audio:
   sample_rate: 16000
@@ -7,9 +5,9 @@ audio:
   chunk_size: 512
   format: paInt16
 
+# 唤醒词配置
 wake_word:
   enabled: true
-  access_key: "dW07kP/0JEak6UJdk/r8j0UmKoUxb4WCR8eSjIzN1PhYWJqHYrAkQw=="
   keywords:
     - "computer"
     - "jarvis"
@@ -28,14 +26,12 @@ langsmith:
   enabled: true
   tracing: true
   endpoint: "https://api.smith.langchain.com"
-  api_key: "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"
-  project: "voxagent-project"
 
 # ASR 配置
 asr:
   provider: "whisper"
   whisper:
-    model: "openai/whisper-small"
+    model: "openai/whisper-base"
     device: null
     batch_size: 8
     chunk_length_s: 30
@@ -43,35 +39,51 @@ asr:
 
 # 高德天气配置
 gaode_weather:
-  api_key: "8cb1eee602cd28b29eba5d27c9d4d569"
 
+# OpenAI 配置
 openai:
-  api_key: "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"
 
 # 七牛云配置
 qiniu:
-  api_key: "sk-ee25dd68d59b66e45d4ed087ceb6c8e30ab0f08f4294908be20a41da14aded3b"
   base_url: "https://openai.qiniu.com/v1"
-  asr:
-    model: "asr"
-    format: "wav"
+  models:
+    # 大模型 - 用于复杂推理（Planner）
+    planner:
+      model: "qwen3-max"
+      temperature: 0.0
+      max_tokens: 500
+    # 快速模型 - 用于工具调用（Workers）
+    worker:
+      model: "qwen3-next-80b-a3b-instruct"
+      temperature: 0.0
+      max_tokens: 300
+    # 快速模型 - 用于简单总结（Summary）
+    summary:
+      model: "qwen3-next-80b-a3b-instruct"
+      temperature: 0.3
+      max_tokens: 200
+
+  # TTS 配置
   tts:
-    model: "tts-1"
-    voice: "alloy"
-  llm:
-    model: "gpt-oss-120b"
-    temperature: 0.7
-    max_tokens: 2000
+    provider: "edge"
+    edge:
+      # 音色选择：
+      # 女声：xiaoxiao, xiaoyi, xiaoyou, yunxi, yunxia
+      # 男声：yunyang, yunjian, yunhao
+      voice: "yunyang"     # 云扬（男声，新闻风格）
+      rate: "+10%"         # 语速（-50% 到 +100%）
+      volume: "+0%"        # 音量（-50% 到 +50%）
+      pitch: "+0Hz"        # 音高（-50Hz 到 +50Hz）
 
 # 录音设置
 recording:
   dynamic:
     min_duration: 2.0
     max_duration: 60.0
-    silence_threshold: 500.0
-    silence_duration: 3.0
-    speech_threshold: 800.0
-    min_speech_chunks: 5
+    silence_threshold: 800.0
+    silence_duration: 2.0
+    speech_threshold: 1200.0
+    min_speech_chunks: 8
   sample_rate: 16000
   channels: 1
   chunk_size: 1024
@@ -81,3 +93,14 @@ agent:
   planner:
     max_iterations: 5
     enable_memory: false
+
+# Google Serper 配置
+google_serper:
+
+# ollama 配置
+ollama:
+  enabled: true
+  base_url: "http://localhost:11434"
+  model: "qwen2.5:7b"
+  temperature: 0.0
+  timeout: 60

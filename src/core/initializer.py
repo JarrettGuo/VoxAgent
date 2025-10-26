@@ -26,9 +26,7 @@ class AssistantInitializer:
 
     def initialize_all(self) -> bool:
         """初始化所有模块"""
-        logger.info("=" * 60)
-        logger.info("🤖 VoxAgent Voice Assistant is starting...")
-        logger.info("=" * 60)
+        logger.info("VoxAgent Voice Assistant is starting...")
 
         self._init_langsmith()
 
@@ -36,24 +34,22 @@ class AssistantInitializer:
         if not self._check_config():
             return False
 
-        # 初始化唤醒词检测器
-        if not self._init_wake_word_detector():
+        # 初始化录音器（创建 PyAudio 实例）
+        if not self._init_recorder():
             return False
 
-        # 初始化录音模块
-        if not self._init_recorder():
+        # 初始化唤醒词检测器（共享 PyAudio 实例）
+        if not self._init_wake_word_detector():
             return False
 
         # 初始化 ASR 客户端
         if not self._init_asr():
             return False
 
-        # TODO: 初始化其他模块
-        # - LLM 客户端
-        # - TTS 客户端
-        # - 工具注册表
+        if not self._init_tts():
+            return False
 
-        logger.info("✅ All modules initialized successfully")
+        logger.info("All modules initialized successfully")
         return True
 
     def _init_langsmith(self) -> None:
@@ -68,7 +64,7 @@ class AssistantInitializer:
         # 检查唤醒词配置
         access_key = self.config.get("wake_word.access_key")
         if not access_key:
-            logger.error("❌ Please configure Porcupine Access Key first")
+            logger.error("Please configure Porcupine Access Key first")
             return False
 
         # 检查 ASR 配置
@@ -81,9 +77,8 @@ class AssistantInitializer:
             # 检查七牛云配置
             api_key = self.config.get("qiniu.api_key")
             if not api_key:
-                logger.error("❌ Please configure Qiniu API Key first")
+                logger.error("Please configure Qiniu API Key first")
                 return False
-        # todo 后续的其他配置检查也要放这里
 
         return True
 
@@ -94,22 +89,27 @@ class AssistantInitializer:
             keywords = self.config.get("wake_word.keywords", ["computer", "jarvis"])
             sensitivities = self.config.get("wake_word.sensitivities", [0.5])
 
+            # 初始化录音器
+            if not self._init_recorder():
+                return False
+
             self.assistant.detector = WakeWordDetector(
                 access_key=access_key,
                 keywords=keywords,
                 sensitivities=sensitivities,
-                on_wake=self.assistant._on_wake_detected
+                on_wake=self.assistant._on_wake_detected,
+                pa_instance=self.assistant.recorder.pa
             )
 
-            logger.info("✅ Wake word detector initialized successfully")
+            logger.info("Wake word detector initialized successfully")
             return True
 
         except Exception as e:
-            logger.error(f"❌ Wake word detector initialization failed: {e}")
+            logger.error(f"Wake word detector initialization failed: {e}")
             return False
 
     def _init_recorder(self) -> bool:
-        """初始化录音器"""
+        """初始化录音器（先于唤醒词检测器）"""
         try:
             sample_rate = self.config.get("recording.sample_rate", 16000)
             channels = self.config.get("recording.channels", 1)
@@ -121,11 +121,11 @@ class AssistantInitializer:
                 chunk_size=chunk_size
             )
 
-            logger.info("✅ Audio recorder initialized successfully")
+            logger.info("Audio recorder initialized successfully")
             return True
 
         except Exception as e:
-            logger.error(f"❌ Audio recorder initialization failed: {e}")
+            logger.error(f"Audio recorder initialization failed: {e}")
             return False
 
     def _init_asr(self) -> bool:
@@ -143,8 +143,8 @@ class AssistantInitializer:
                 batch_size = self.config.get("asr.whisper.batch_size", 8)
                 chunk_length = self.config.get("asr.whisper.chunk_length_s", 30)
 
-                logger.info(f"   Using local Whisper ASR")
-                logger.info(f"   Model: {model}")
+                logger.info(f"Using local Whisper ASR")
+                logger.info(f"Model: {model}")
 
                 self.assistant.asr_client = WhisperASR(
                     model_name=model,
@@ -155,19 +155,39 @@ class AssistantInitializer:
                 self.assistant.asr_provider = "whisper"
                 self.assistant.asr_language = self.config.get("asr.whisper.language", "zh")
             else:
-                logger.error(f"❌ Unknown ASR provider: {provider}")
+                logger.error(f"Unknown ASR provider: {provider}")
                 return False
 
-            logger.info(f"✅ ASR client initialized (provider: {provider})")
+            logger.info(f"ASR client initialized (provider: {provider})")
             return True
 
         except Exception as e:
-            logger.error(f"❌ ASR client initialization failed: {e}")
+            logger.error(f"ASR client initialization failed: {e}")
             import traceback
             traceback.print_exc()
 
             if "No module named" in str(e):
-                logger.info("\n💡 Tip: Please install dependencies:")
-                logger.info("   pip install torch transformers accelerate")
+                logger.info("\nTip: Please install dependencies:")
+                logger.info("pip install torch transformers accelerate")
 
+            return False
+
+    def _init_tts(self) -> bool:
+        """初始化 TTS 客户端"""
+        try:
+            from src.services.tts_client import tts_client
+
+            edge_config = self.config.get("tts.edge", {})
+            self.assistant.processor.tts_client = tts_client(
+                voice=edge_config.get("voice", "yunyang"),
+                rate=edge_config.get("rate", "+0%"),
+                volume=edge_config.get("volume", "+0%"),
+                pitch=edge_config.get("pitch", "+0Hz")
+            )
+
+            logger.info("TTS client initialized successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"TTS client initialization failed: {e}")
             return False

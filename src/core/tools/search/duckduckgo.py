@@ -16,7 +16,7 @@ from src.utils.logger import logger
 def duckduckgo_search(**kwargs) -> BaseTool:
     """工厂函数：创建 DuckDuckGo 搜索工具"""
     try:
-        logger.info("🔧 创建 DuckDuckGo 搜索工具")
+        logger.info("创建 DuckDuckGo 搜索工具")
 
         tool = DuckDuckGoSearchRun(
             name="duckduckgo_search",

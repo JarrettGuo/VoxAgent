@@ -7,9 +7,11 @@
 """
 
 from .duckduckgo import duckduckgo_search
+from .google import google_serper
 from .wikipedia import wikipedia_search
 
 __all__ = [
     "duckduckgo_search",
     "wikipedia_search",
+    "google_serper",
 ]

@@ -5,15 +5,20 @@
 @Author : guojarrett@gmail.com
 @File   : registry.py
 """
+
 import platform
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from langchain_core.tools import BaseTool
 
-from src.core.tools.file import file_create, file_read, file_search, file_list, file_find_recent, file_delete, \
-    file_append, file_write
-from src.core.tools.image import dalle3
-from src.core.tools.search import duckduckgo_search, wikipedia_search
+from src.core.tools import dalle3
+# 导入工具
+from src.core.tools.file import (
+    file_create, file_read, file_search, file_list,
+    file_find_recent, file_delete, file_append, file_write
+)
+from src.core.tools.image import image_download
+from src.core.tools.search import duckduckgo_search, wikipedia_search, google_serper
 from src.core.tools.system import app_control
 from src.core.tools.weather import gaode_weather
 from src.utils.config import config
@@ -29,55 +34,141 @@ class ToolRegistry:
         self._register_default_tools()
 
     def _register_default_tools(self):
-        """注册默认工具"""
+        """注册默认工具（保持原有逻辑）"""
         # 系统工具
-        self.register("app_control", app_control())
+        self.register(app_control())
 
         # 文件工具
-        self.register("file_create", file_create())
-        self.register("file_read", file_read())
-        self.register("file_write", file_write())
-        self.register("file_append", file_append())
-        self.register("file_delete", file_delete())
-        self.register("file_search", file_search())
-        self.register("file_list", file_list())
-        self.register("file_find_recent", file_find_recent())
+        self.register(file_create())
+        self.register(file_read())
+        self.register(file_write())
+        self.register(file_append())
+        self.register(file_delete())
+        self.register(file_search())
+        self.register(file_list())
+        self.register(file_find_recent())
 
         # 搜索工具
         try:
-            self.register("duckduckgo_search", duckduckgo_search())
+            self.register(duckduckgo_search())
         except Exception as e:
             logger.warning(f"DuckDuckGo registration failed: {e}")
 
         try:
-            self.register("wikipedia_search", wikipedia_search())
+            self.register(wikipedia_search())
         except Exception as e:
             logger.warning(f"Wikipedia registration failed: {e}")
+
+        try:
+            api_key = config.get("google_serper.api_key")
+            if api_key:
+                self.register(google_serper(api_key=api_key))
+            else:
+                logger.warning("Google Serper API key not configured, skipping")
+        except Exception as e:
+            logger.warning(f"Google Serper registration failed: {e}")
 
         # 天气工具
         try:
             api_key = config.get("gaode_weather.api_key")
-            self.register("gaode_weather", gaode_weather(api_key=api_key))
+            if api_key:
+                self.register(gaode_weather(api_key=api_key))
         except Exception as e:
             logger.warning(f"Gaode Weather registration failed: {e}")
 
         # 图像工具
         try:
             api_key = config.get("openai.api_key")
-            self.register("dalle3", dalle3(api_key=api_key))
+            self.register(dalle3(api_key=api_key))
         except Exception as e:
             logger.warning(f"DALL·E 3 registration failed: {e}")
+        self.register(image_download())
 
         # macOS 专用工具
-        if platform.system() == "Darwin":  # 仅在 macOS 上注册
+        if platform.system() == "Darwin":
             self._register_macos_tools()
 
-    def register(self, name: str, tool: BaseTool):
-        """注册工具"""
-        if name in self._tools:
-            logger.warning(f"Tool {name} is already registered. Overwriting.")
+        if platform.system() == "Windows":
+            self._register_windows_tools()
 
-        self._tools[name] = tool
+    def register(self, tool: BaseTool, name: Optional[str] = None) -> None:
+        """注册工具"""
+        # 自动从 tool 对象获取名称
+        tool_name = name or tool.name
+
+        if tool_name in self._tools:
+            logger.warning(f"Tool {tool_name} already registered, overwriting")
+
+        self._tools[tool_name] = tool
+        logger.debug(f"Registered tool: {tool_name}")
+
+    def get_tool(self, tool_name: str) -> BaseTool:
+        """获取单个工具"""
+        if tool_name not in self._tools:
+            raise ValueError(
+                f"Tool '{tool_name}' not found. "
+                f"Available tools: {list(self._tools.keys())}"
+            )
+        return self._tools[tool_name]
+
+    def get_tools_by_names(self, tool_names: List[str]) -> List[BaseTool]:
+        """批量获取工具"""
+        return [self.get_tool(name) for name in tool_names]
+
+    def get_all_tool_names(self) -> List[str]:
+        """获取所有工具名称"""
+        return list(self._tools.keys())
+
+    def get_all_tools(self) -> List[BaseTool]:
+        """获取所有工具实例"""
+        return list(self._tools.values())
+
+    def has_tool(self, name: str) -> bool:
+        """检查工具是否存在"""
+        return name in self._tools
+
+    def unregister(self, tool_name: str) -> bool:
+        """注销工具"""
+        if tool_name in self._tools:
+            del self._tools[tool_name]
+            logger.info(f"🗑️  Unregistered tool: {tool_name}")
+            return True
+        return False
+
+    def clear(self) -> None:
+        """清空所有工具"""
+        self._tools.clear()
+        logger.info("🗑️  Cleared all tools")
+
+    def get_tools_by_category(self, category: str) -> List[BaseTool]:
+        """根据类别获取工具"""
+        category_map = {
+            "system": ["app_control"],
+            "file": [
+                "file_create", "file_read", "file_write", "file_append",
+                "file_delete", "file_search", "file_list", "file_find_recent"
+            ],
+            "search": ["duckduckgo_search", "wikipedia_search"],
+            "weather": ["gaode_weather"],
+            "image": ["dalle3", "download_image"],
+            "macos_mail": ["mail_search", "mail_read"],
+            "macos_music": ["music_play", "music_control", "music_search"],
+            "windows_mail": ["outlook_search", "outlook_read"],
+            "windows_music": ["pygame_music_play", "pygame_music_control", "pygame_music_search"],
+        }
+
+        tool_names = category_map.get(category, [])
+        return [self._tools[name] for name in tool_names if name in self._tools]
+
+    def get_tool_info(self) -> List[Dict[str, str]]:
+        """获取所有工具的信息"""
+        tool_info = []
+        for tool in self._tools.values():
+            tool_info.append({
+                "name": tool.name,
+                "description": tool.description,
+            })
+        return tool_info
 
     def _register_macos_tools(self):
         """注册 macOS 专用工具"""
@@ -88,50 +179,42 @@ class ToolRegistry:
             )
 
             # 邮件工具
-            self.register("mail_search", mail_search())
-            self.register("mail_read", mail_read())
-            self.register("mail_send", mail_send())
+            self.register(mail_search())
+            self.register(mail_read())
+            # self.register(mail_send())
 
             # 音乐工具
-            self.register("music_play", music_play())
-            self.register("music_control", music_control())
-            self.register("music_search", music_search())
+            self.register(music_play())
+            self.register(music_control())
+            self.register(music_search())
 
-            logger.info("macOS 专用工具注册成功")
+            logger.info("macOS tools registered")
 
         except Exception as e:
-            logger.warning(f"macOS 工具注册失败: {e}")
+            logger.warning(f"macOS tools registration failed: {e}")
 
-    def get(self, name: str) -> BaseTool:
-        """获取工具"""
-        if name not in self._tools:
-            raise ValueError(f"Tool {name} is not registered.")
+    def _register_windows_tools(self):
+        """注册 macOS 专用工具"""
+        try:
+            from src.core.tools.system.windows import (
+                outlook_send, outlook_read, outlook_search,
+                pygame_music_search, pygame_music_play, pygame_music_control
+            )
 
-        return self._tools[name]
+            # 邮件工具
+            self.register(outlook_search())
+            self.register(outlook_read())
+            # self.register(outlook_send())
 
-    def get_all(self) -> List[BaseTool]:
-        """获取所有工具"""
-        return list(self._tools.values())
+            # 音乐工具
+            self.register(pygame_music_search())
+            self.register(pygame_music_play())
+            self.register(pygame_music_control())
 
-    def get_tool_names(self) -> List[str]:
-        """获取所有工具名称"""
-        return list(self._tools.keys())
+            logger.info("windows tools registered")
 
-    def get_tools_by_category(self, category: str) -> List[BaseTool]:
-        """根据类别获取工具"""
-        category_map = {
-            "system": ["app_control"],
-            "file": ["file_create", "file_read", "file_write", "file_append",
-                     "file_delete", "file_search", "file_list", "file_find_recent"],
-            "search": ["duckduckgo_search", "wikipedia_search"],
-            "weather": ["gaode_weather"],
-            "image": ["dalle3"],
-            "macos_mail": ["mail_search", "mail_read", "mail_send"],
-            "macos_music": ["music_play", "music_control", "music_search"],
-        }
-
-        tool_names = category_map.get(category, [])
-        return [self._tools[name] for name in tool_names if name in self._tools]
+        except Exception as e:
+            logger.warning(f"windows tools registration failed: {e}")
 
 
 # 全局工具注册中心实例

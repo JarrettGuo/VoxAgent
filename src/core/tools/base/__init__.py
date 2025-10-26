@@ -30,6 +30,16 @@ from .schemas import (
     WikipediaSearchSchema,
     GaodeWeatherSchema,
     Dalle3Schema,
+    GoogleSerperSchema,
+)
+
+from .windows_schemas import (
+    OutlookSearchSchema,
+    OutlookReadSchema,
+    OutlookSendSchema,
+    PygameSearchSchema,
+    PygamePlaySchema,
+    PygameControlSchema
 )
 
 __all__ = [
@@ -52,4 +62,11 @@ __all__ = [
     "MusicPlaySchema",
     "MusicControlSchema",
     "MusicSearchSchema",
+    "GoogleSerperSchema",
+    "OutlookSearchSchema",
+    "OutlookReadSchema",
+    "OutlookSendSchema",
+    "MediaSearchSchema",
+    "MediaControlSchema",
+    "MediaPlaySchema",
 ]

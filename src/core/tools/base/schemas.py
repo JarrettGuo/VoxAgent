@@ -5,7 +5,7 @@
 @Author : guojarrett@gmail.com
 @File   : schemas.py
 """
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -21,6 +21,11 @@ class DuckDuckGoSearchSchema(BaseModel):
     query: str = Field(description="需要检索查询的语句")
 
 
+class GoogleSerperSchema(BaseModel):
+    """Google Serper 搜索参数"""
+    query: str = Field(description="需要检索查询的语句，例如：'2024年人工智能发展趋势'")
+
+
 class WikipediaSearchSchema(BaseModel):
     """维基百科搜索参数"""
     query: str = Field(description="需要在维基百科中查询的关键词")
@@ -34,3 +39,11 @@ class GaodeWeatherSchema(BaseModel):
 class Dalle3Schema(BaseModel):
     """DALL·E 3 图像生成参数"""
     query: str = Field(description="用于生成图像的文本提示（英文效果更好）")
+
+class ImageDownloadSchema(BaseModel):
+    """图片下载工具的输入"""
+    url: str = Field(description="要下载的图片URL")
+    filename: Optional[str] = Field(
+        default=None,
+        description="保存的文件名（可选），如果不提供会自动生成。应该包含扩展名如 .png 或 .jpg"
+    )

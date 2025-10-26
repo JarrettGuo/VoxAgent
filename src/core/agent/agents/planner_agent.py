@@ -8,187 +8,103 @@
 
 import json
 import uuid
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
-from langchain_core.messages import SystemMessage, AIMessage
-from langgraph.constants import END
-from langgraph.graph.state import StateGraph, CompiledStateGraph
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 
-from src.core.agent.agents.base_agent import BaseAgent
-from src.core.agent.entities.agent_entity import AgentState
 from src.core.agent.entities.agent_prompts import PLANNER_AGENT_SYSTEM_PROMPT_TEMPLATE
-from src.core.agent.entities.queue_entity import QueueEvent, AgentThought
+from src.core.agent.entities.plan_entity import PlannerOutput, PlanStep
+from src.core.models import ExecutionPlan, Task, TaskStatus
 from src.utils.logger import logger
 
 
-class TaskPlan(dict):
-    """任务计划数据结构"""
+class PlannerAgent:
+    """LLM 任务规划器 - 将用户输入转换为标准化的执行计划"""
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, llm: BaseChatModel, available_agents: Optional[Dict[str, Any]] = None):
+        self.llm = llm
+        self.available_agents = available_agents or {}
 
-    @property
-    def is_invalid_input(self) -> bool:
-        """判断是否为无效输入"""
-        return self.get("feasibility") == "invalid_input"
+        # 构建 Agent 信息
+        self.agent_info = self._format_agent_info()
 
-    @property
-    def is_infeasible(self) -> bool:
-        """判断任务是否不可行"""
-        return self.get("feasibility") == "infeasible"
+        logger.info(
+            f"Planner initialized with {len(self.available_agents)} agents"
+        )
 
-    @property
-    def steps(self) -> list:
-        """获取任务步骤"""
-        return self.get("steps", [])
+    def _format_agent_info(self) -> str:
+        """格式化 Agent 信息供 LLM 参考"""
+        if not self.available_agents:
+            return "Planner has no available agents."
 
+        lines = []
+        for agent_type, agent in self.available_agents.items():
+            ability = agent.get_ability_info()
+            lines.append(
+                f"- {agent_type}: {ability['description']}\n"
+                f"  工具: {', '.join(ability['tools'])}"
+            )
 
-class PlannerAgent(BaseAgent):
-    """
-    任务规划 Agent - 负责将用户意图转换为可执行的任务计划
+        return "\n".join(lines)
 
-    功能：
-    1. 输入验证：检查用户输入是否有效
-    2. 可行性评估：判断任务是否在计算机能力范围内
-    3. 任务分解：将复杂任务分解为可执行的步骤
-    4. 输出结构化计划：JSON 格式的任务计划
-
-    图结构：
-    START -> validate_and_plan -> END / Other Agent Calls (if needed)
-    """
-
-    name: str = "planner_agent"
-
-    def _build_agent(self) -> CompiledStateGraph:
-        """构建 LangGraph 图结构"""
-        # 1. 创建状态图
-        graph = StateGraph(AgentState)
-
-        # 2. 添加节点
-        graph.add_node("validate_and_plan", self._validate_and_plan_node)
-
-        # 3. 设置入口点
-        graph.set_entry_point("validate_and_plan")
-
-        # 4. 直接结束
-        graph.add_edge("validate_and_plan", END)
-
-        # 5. 编译图
-        compiled_graph = graph.compile()
-
-        logger.info(f"✅ {self.name} graph compiled successfully")
-        return compiled_graph
-
-    def _validate_and_plan_node(self, state: AgentState) -> AgentState:
-        """
-        验证输入并生成任务计划节点
-
-        流程：
-        1. 提取用户输入
-        2. 构建带有系统提示词的消息
-        3. 调用 LLM 生成计划
-        4. 解析并验证计划
-        5. 发布事件
-        """
-        task_id = state["task_id"]
-        user_input = state["messages"][-1].content
-
-        logger.info(f"🧠 Planning task: {user_input}")
-
-        # 1. 发布开始思考事件
-        self._queue_manager.publish(task_id, AgentThought(
-            id=uuid.uuid4(),
-            task_id=task_id,
-            event=QueueEvent.AGENT_THOUGHT,
-            thought=f"正在分析任务: {user_input}",
-        ))
-
+    async def plan(self, user_query: str, conversation_history: Optional[List[BaseMessage]] = None) -> ExecutionPlan:
+        """生成执行计划（异步）"""
         try:
-            # 2. 构建消息（添加系统提示词）
+            # 1. 构建提示词
+            system_prompt = PLANNER_AGENT_SYSTEM_PROMPT_TEMPLATE.format(
+                agent_info=self.agent_info
+            )
+
+            # 2. 调用 LLM
             messages = [
-                SystemMessage(content=PLANNER_AGENT_SYSTEM_PROMPT_TEMPLATE),
-                state["messages"][-1]
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=user_query)
             ]
 
-            # 3. 调用 LLM 生成计划
-            response = self.llm.invoke(messages)
+            if conversation_history:
+                messages.extend(conversation_history)
+                logger.info(
+                    f"Planning with {len(conversation_history)} "
+                    f"history messages"
+                )
+            else:
+                # 如果没有历史，使用单轮查询
+                messages.append(HumanMessage(content=user_query))
+
+            response = await self.llm.ainvoke(messages)
             response_content = response.content.strip()
 
-            logger.debug(f"📋 LLM response: {response_content[:200]}...")
+            # 3. 解析响应
+            planner_output = self._parse_response(response_content, user_query)
 
-            # 4. 解析计划
-            task_plan = self._parse_plan(response_content, user_input)
+            # 4. 转换为 ExecutionPlan
+            execution_plan = self._convert_to_execution_plan(planner_output)
 
-            # 5. 根据计划类型发布不同事件
-            if task_plan.is_invalid_input:
-                # 无效输入
-                message = "输入内容无法理解，请重新表述您的需求。"
-                self._publish_final_message(task_id, message, task_plan)
+            logger.info(
+                f"Generated plan with {len(execution_plan.tasks)} tasks "
+                f"(feasibility: {planner_output.feasibility})"
+            )
 
-            elif task_plan.is_infeasible:
-                # 任务不可行
-                message = "抱歉，这个任务超出了我的能力范围。我只能执行计算机相关的操作。"
-                self._publish_final_message(task_id, message, task_plan)
-
-            else:
-                # 有效计划
-                steps_summary = self._format_steps_summary(task_plan.steps)
-                message = f"我已经为您制定了计划：\n\n{steps_summary}"
-                self._publish_final_message(task_id, message, task_plan)
-
-            # 6. 发布结束事件
-            self._queue_manager.publish(task_id, AgentThought(
-                id=uuid.uuid4(),
-                task_id=task_id,
-                event=QueueEvent.AGENT_END,
-            ))
-
-            # 7. 返回更新后的状态
-            return {
-                "messages": [AIMessage(content=message)],
-                "is_finished": True,
-                "final_output": message,
-                "metadata": {"plan": task_plan}
-            }
+            return execution_plan
 
         except Exception as e:
-            logger.error(f"❌ Planning failed: {e}")
-            error_message = f"规划任务时出错: {str(e)}"
+            logger.error(f"Planning failed: {e}", exc_info=True)
 
-            self._queue_manager.publish(task_id, AgentThought(
-                id=uuid.uuid4(),
-                task_id=task_id,
-                event=QueueEvent.ERROR,
-                observation=error_message,
-            ))
+            # 返回空计划
+            return self._create_empty_plan(user_query, error=str(e))
 
-            return {
-                "messages": [AIMessage(content=error_message)],
-                "is_finished": True,
-                "final_output": error_message,
-            }
+    def plan_sync(self, user_query: str, conversation_history: Optional[List[BaseMessage]] = None) -> ExecutionPlan:
+        """生成执行计划（同步）"""
+        import asyncio
+        return asyncio.run(self.plan(user_query, conversation_history))
 
-    def _parse_plan(self, response: str, original_task: str) -> TaskPlan:
-        """解析 LLM 响应为结构化计划，将 JSON 转换为 TaskPlan 对象"""
-        # 检查特殊标记
-        if "---Invalid Input---" in response:
-            return TaskPlan({
-                "task": original_task,
-                "feasibility": "invalid_input",
-                "steps": []
-            })
-
-        if "---Infeasible Task---" in response:
-            return TaskPlan({
-                "task": original_task,
-                "feasibility": "infeasible",
-                "steps": []
-            })
-
-        # 尝试解析 JSON
+    def _parse_response(self, response: str, original_task: str) -> PlannerOutput:
+        """解析 LLM 响应为 PlannerOutput"""
         try:
-            # 提取 JSON 部分（可能被包裹在 markdown 代码块中）
-            json_str = response
+            json_str = response.strip()
+
+            # 移除 Markdown 代码块
             if "```json" in response:
                 json_str = response.split("```json")[1].split("```")[0].strip()
             elif "```" in response:
@@ -198,77 +114,107 @@ class PlannerAgent(BaseAgent):
             plan_dict = json.loads(json_str)
 
             # 验证必要字段
-            if "steps" not in plan_dict:
-                raise ValueError("Plan missing 'steps' field")
-
-            # 确保有 feasibility 字段
             if "feasibility" not in plan_dict:
-                plan_dict["feasibility"] = "feasible"
+                raise ValueError("Missing 'feasibility' field")
 
-            return TaskPlan(plan_dict)
+            # 验证 feasibility 值
+            valid_feasibility = ["feasible", "infeasible", "invalid_input"]
+            if plan_dict["feasibility"] not in valid_feasibility:
+                raise ValueError(f"Invalid feasibility value: {plan_dict['feasibility']}")
+
+            # 转换 steps
+            steps = []
+            for step_dict in plan_dict.get("steps", []):
+                steps.append(PlanStep(**step_dict))
+
+            return PlannerOutput(
+                task=plan_dict.get("task", original_task),
+                feasibility=plan_dict["feasibility"],
+                reason=plan_dict.get("reason", ""),  # ← 新增
+                steps=steps
+            )
 
         except json.JSONDecodeError as e:
-            logger.warning(f"⚠️ Failed to parse JSON plan: {e}")
+            logger.warning(f"JSON parse failed: {e}")
             logger.warning(f"Response: {response[:200]}...")
-
-            # 返回默认的不可行计划
-            return TaskPlan({
-                "task": original_task,
-                "feasibility": "infeasible",
-                "steps": [],
-                "error": f"Failed to parse plan: {str(e)}"
-            })
+            return PlannerOutput(
+                task=original_task,
+                feasibility="invalid_input",
+                reason=f"LLM 返回的不是有效的 JSON 格式",
+                steps=[]
+            )
 
         except Exception as e:
-            logger.error(f"❌ Error parsing plan: {e}")
-            return TaskPlan({
-                "task": original_task,
-                "feasibility": "infeasible",
-                "steps": [],
-                "error": str(e)
-            })
+            logger.error(f"Parse error: {e}")
+            return PlannerOutput(
+                task=original_task,
+                feasibility="invalid_input",
+                reason=f"解析错误: {str(e)}",
+                steps=[]
+            )
 
-    def _format_steps_summary(self, steps: list) -> str:
-        """格式化步骤摘要"""
-        if not steps:
-            return "无具体步骤"
+    def _convert_to_execution_plan(self, planner_output: PlannerOutput) -> ExecutionPlan:
+        """将 PlannerOutput 转换为 ExecutionPlan"""
+        plan_id = str(uuid.uuid4())
 
-        summary_lines = []
-        for step in steps[:5]:  # 最多显示前 5 步
-            step_num = step.get("step_number", "?")
-            action = step.get("action", "未知操作")
-            summary_lines.append(f"{step_num}. {action}")
-
-        if len(steps) > 5:
-            summary_lines.append(f"... 还有 {len(steps) - 5} 个步骤")
-
-        return "\n".join(summary_lines)
-
-    def _publish_final_message(
-            self,
-            task_id,
-            message: str,
-            plan: Optional[TaskPlan] = None
-    ):
-        """发布最终消息事件"""
-        metadata = {}
-        if plan:
-            metadata = dict(plan)
-
-        self._queue_manager.publish(task_id, AgentThought(
-            id=uuid.uuid4(),
-            task_id=task_id,
-            event=QueueEvent.AGENT_MESSAGE,
-            observation=message,
-            metadata=metadata
-        ))
-
-    def plan_task(self, task_description: str) -> Dict[str, Any]:
-        """便捷方法：直接规划任务（同步调用"""
-        result = self.invoke({"user_input": task_description})
-
-        return {
-            "success": result.is_finished,
-            "message": result.output,
-            "plan": result.metadata.get("plan", {})
+        # 构建 metadata
+        metadata = {
+            "feasibility": planner_output.feasibility,
+            "reason": planner_output.reason,  # ← 新增
+            "original_task": planner_output.task
         }
+
+        # 检查可行性
+        if planner_output.feasibility != "feasible":
+            return ExecutionPlan(
+                plan_id=plan_id,
+                tasks=[],
+                dependencies={},
+                metadata=metadata
+            )
+
+        # 转换步骤为 Task 列表
+        tasks = []
+        for step in planner_output.steps:
+            task_id = str(uuid.uuid4())
+
+            task = Task(
+                task_id=task_id,
+                description=step.description,
+                assigned_agent=step.assigned_agent,
+                metadata={
+                    "step_number": step.step_number,
+                    "expected_result": step.expected_result
+                },
+                status=TaskStatus.PENDING
+            )
+
+            tasks.append(task)
+
+        metadata["total_steps"] = len(tasks)
+
+        return ExecutionPlan(
+            plan_id=plan_id,
+            tasks=tasks,
+            dependencies={},
+            metadata=metadata
+        )
+
+    def _create_empty_plan(self, user_query: str, error: Optional[str] = None) -> ExecutionPlan:
+        """创建空计划（用于错误情况）"""
+        return ExecutionPlan(
+            plan_id=str(uuid.uuid4()),
+            tasks=[],
+            dependencies={},
+            metadata={
+                "original_query": user_query,
+                "error": error,
+                "feasibility": "error"
+            }
+        )
+
+    def update_available_agents(self, agents: Dict[str, Any]):
+        """更新可用 Agent 列表"""
+        self.available_agents = agents
+        self.agent_info = self._format_agent_info()
+        logger.info(f"Updated {len(agents)} available agents")
