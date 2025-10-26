@@ -33,6 +33,15 @@ from .schemas import (
     GoogleSerperSchema,
 )
 
+from .windows_schemas import (
+    OutlookSearchSchema,
+    OutlookReadSchema,
+    OutlookSendSchema,
+    PygameSearchSchema,
+    PygamePlaySchema,
+    PygameControlSchema
+)
+
 __all__ = [
     "AppControlSchema",
     "FileCreateSchema",
@@ -54,4 +63,10 @@ __all__ = [
     "MusicControlSchema",
     "MusicSearchSchema",
     "GoogleSerperSchema",
+    "OutlookSearchSchema",
+    "OutlookReadSchema",
+    "OutlookSendSchema",
+    "MediaSearchSchema",
+    "MediaControlSchema",
+    "MediaPlaySchema",
 ]
