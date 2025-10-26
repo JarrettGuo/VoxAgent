@@ -41,6 +41,8 @@ class AudioRecorder:
 
     def start_recording(self):
         """开始录音"""
+        time.sleep(0.1)
+        
         if self.stream is not None:
             logger.warning("Recording is already in progress.")
             return

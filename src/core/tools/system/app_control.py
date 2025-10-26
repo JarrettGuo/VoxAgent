@@ -5,10 +5,11 @@
 @Author : guojarrett@gmail.com
 @File   : app_control.py
 """
+
 import os
 import platform
 import subprocess
-from typing import Any, Type, Dict, ClassVar
+from typing import Any, Type, Dict
 
 from langchain_core.tools import BaseTool
 
@@ -24,80 +25,138 @@ class AppControlTool(BaseTool):
     args_schema: Type[AppControlSchema] = AppControlSchema
 
     # 多平台映射
-    APP_MAP: ClassVar[Dict[str, Dict[str, Any]]] = {
-        "chrome": {
-            "Darwin": "Google Chrome",
-            "Windows": {
-                "exe": "chrome.exe",
-                "path":  os.path.join(os.environ["ProgramFiles"], "Google", "Chrome", "Application", "chrome.exe")
+    @staticmethod
+    def _get_app_map() -> Dict[str, Dict[str, Any]]:
+        """动态生成应用映射（避免在类定义时访问环境变量）"""
+        system = platform.system()
+
+        # Windows 路径
+        if system == "Windows":
+            program_files = os.environ.get("ProgramFiles", "C:\\Program Files")
+            local_appdata = os.environ.get("LOCALAPPDATA", os.path.expanduser("~\\AppData\\Local"))
+
+            windows_chrome_path = os.path.join(program_files, "Google", "Chrome", "Application", "chrome.exe")
+            windows_vscode_path = os.path.join(local_appdata, "Programs", "Microsoft VS Code", "Code.exe")
+        else:
+            windows_chrome_path = None
+            windows_vscode_path = None
+
+        return {
+            "chrome": {
+                "Darwin": "Google Chrome",
+                "Windows": {
+                    "exe": "chrome.exe",
+                    "path": windows_chrome_path
+                },
+                "Linux": "google-chrome"
             },
-            "Linux": "google-chrome"
-        },
-        "浏览器": {
-            "Darwin": "Google Chrome",
-            "Windows": {
-                "exe": "chrome.exe",
-                "path":  os.path.join(os.environ["ProgramFiles"], "Google", "Chrome", "Application", "chrome.exe")
+            "浏览器": {
+                "Darwin": "Google Chrome",
+                "Windows": {
+                    "exe": "chrome.exe",
+                    "path": windows_chrome_path
+                },
+                "Linux": "google-chrome"
             },
-            "Linux": "google-chrome"
-        },
-        "微信": {
-            "Darwin": "WeChat",
-            "Windows": {
-                "exe": "WeChat.exe",
-                "path": r"D:\tools\contact\Weixin.exe"
+            "safari": {
+                "Darwin": "Safari",
+                "Windows": None,
+                "Linux": None
             },
-            "Linux": "wechat"
-        },
-        "wechat": {
-            "Darwin": "WeChat",
-            "Windows": {
-                "exe": "WeChat.exe",
-                "path": r"D:\tools\contact\Weixin.exe"
+            "微信": {
+                "Darwin": "WeChat",
+                "Windows": {
+                    "exe": "WeChat.exe",
+                    "path": r"C:\Program Files\Tencent\WeChat\WeChat.exe"  # 默认路径
+                },
+                "Linux": "wechat"
             },
-            "Linux": "wechat"
-        },
-        "记事本": {
-            "Darwin": "TextEdit",
-            "Windows": {
-                "exe": "notepad.exe",
-                "path": "notepad.exe"  # System app, no full path needed
+            "wechat": {
+                "Darwin": "WeChat",
+                "Windows": {
+                    "exe": "WeChat.exe",
+                    "path": r"C:\Program Files\Tencent\WeChat\WeChat.exe"
+                },
+                "Linux": "wechat"
             },
-            "Linux": "gedit"
-        },
-        "vscode": {
-            "Darwin": "Visual Studio Code",
-            "Windows": {
-                "exe": "Code.exe",
-                "path": os.path.join(os.environ["LOCALAPPDATA"], "Programs", "Microsoft VS Code")
+            "记事本": {
+                "Darwin": "TextEdit",
+                "Windows": {
+                    "exe": "notepad.exe",
+                    "path": "notepad.exe"
+                },
+                "Linux": "gedit"
             },
-            "Linux": "code"
-        },
-        "终端": {
-            "Darwin": "Terminal",
-            "Windows": {
-                "exe": "cmd.exe",
-                "path": "cmd.exe"
+            "notepad": {
+                "Darwin": "TextEdit",
+                "Windows": {
+                    "exe": "notepad.exe",
+                    "path": "notepad.exe"
+                },
+                "Linux": "gedit"
             },
-            "Linux": "gnome-terminal"
-        },
-        "terminal": {
-            "Darwin": "Terminal",
-            "Windows": {
-                "exe": "cmd.exe",
-                "path": "cmd.exe"
+            "vscode": {
+                "Darwin": "Visual Studio Code",
+                "Windows": {
+                    "exe": "Code.exe",
+                    "path": windows_vscode_path
+                },
+                "Linux": "code"
             },
-            "Linux": "gnome-terminal"
-        },
-    }
+            "终端": {
+                "Darwin": "Terminal",
+                "Windows": {
+                    "exe": "cmd.exe",
+                    "path": "cmd.exe"
+                },
+                "Linux": "gnome-terminal"
+            },
+            "terminal": {
+                "Darwin": "Terminal",
+                "Windows": {
+                    "exe": "cmd.exe",
+                    "path": "cmd.exe"
+                },
+                "Linux": "gnome-terminal"
+            },
+            # macOS 特有应用
+            "music": {
+                "Darwin": "Music",
+                "Windows": None,
+                "Linux": None
+            },
+            "mail": {
+                "Darwin": "Mail",
+                "Windows": None,
+                "Linux": None
+            },
+            "notes": {
+                "Darwin": "Notes",
+                "Windows": None,
+                "Linux": None
+            },
+            "finder": {
+                "Darwin": "Finder",
+                "Windows": None,
+                "Linux": None
+            },
+        }
 
     def _get_app_info(self, app_name: str) -> Any:
         """Get platform-specific app information"""
         system = platform.system()
         app_key = app_name.lower()
 
-        if app_key in self.APP_MAP:
-            return self.APP_MAP[app_key].get(system, app_name)
+        app_map = self._get_app_map()
+
+        if app_key in app_map:
+            app_info = app_map[app_key].get(system)
+            if app_info is None:
+                raise ValueError(f"应用 '{app_name}' 在 {system} 平台上不可用")
+            return app_info
+
+        # 如果不在映射中，返回原始名称
+        logger.warning(f"App '{app_name}' not in predefined map, using as-is")
         return app_name
 
     def _run(self, app_name: str, action: str, **kwargs: Any) -> str:
@@ -110,10 +169,13 @@ class AppControlTool(BaseTool):
             elif action == "close":
                 return self._close_app(app_info)
             else:
-                return f"Not supported action: {action}"
+                return f"不支持的操作: {action}，支持的操作: open, close"
+        except ValueError as e:
+            # 平台不支持的应用
+            return str(e)
         except Exception as e:
-            error_msg = f"failed to {action} app {app_name}: {str(e)}"
-            logger.error(error_msg)
+            error_msg = f"执行 {action} 应用 {app_name} 失败: {str(e)}"
+            logger.error(error_msg, exc_info=True)
             return error_msg
 
     def _open_app(self, app_info: Any) -> str:
@@ -123,7 +185,7 @@ class AppControlTool(BaseTool):
         try:
             if system == "Darwin":  # macOS
                 subprocess.run(["open", "-a", app_info], check=True)
-                return f"Opened app: {app_info}"
+                return f"已打开应用: {app_info}"
 
             elif system == "Windows":
                 # app_info is a dict with 'exe' and 'path'
@@ -132,19 +194,24 @@ class AppControlTool(BaseTool):
                 else:
                     path = app_info
 
+                if not path:
+                    return f"无法找到应用路径"
+
                 # Try to open with full path
                 subprocess.run(["start", "", path], shell=True, check=True)
-                return f"Opened app: {path}"
+                return f"已打开应用: {path}"
 
             elif system == "Linux":
                 subprocess.run([app_info], check=True)
-                return f"Opened app: {app_info}"
+                return f"已打开应用: {app_info}"
 
             else:
-                return f"Not supported operating system: {system}"
+                return f"不支持的操作系统: {system}"
 
+        except subprocess.CalledProcessError as e:
+            return f"打开应用失败: {str(e)}"
         except Exception as e:
-            return f"Error opening app: {str(e)}"
+            return f"打开应用时发生错误: {str(e)}"
 
     def _close_app(self, app_info: Any) -> str:
         """关闭应用程序"""
@@ -160,9 +227,9 @@ class AppControlTool(BaseTool):
                 )
                 if result.returncode != 0:
                     if "isn't running" in result.stderr or "not running" in result.stderr:
-                        return f"App {app_info} is not running"
-                    return f"Error closing app: {result.stderr}"
-                return f"Closed app: {app_info}"
+                        return f"应用 {app_info} 未在运行"
+                    return f"关闭应用失败: {result.stderr}"
+                return f"已关闭应用: {app_info}"
 
             elif system == "Windows":
                 # app_info is a dict with 'exe'
@@ -170,6 +237,9 @@ class AppControlTool(BaseTool):
                     exe_name = app_info.get("exe")
                 else:
                     exe_name = app_info if app_info.endswith(".exe") else f"{app_info}.exe"
+
+                if not exe_name:
+                    return "无法确定应用的进程名"
 
                 # Remove check=True to handle errors manually
                 result = subprocess.run(
@@ -179,11 +249,11 @@ class AppControlTool(BaseTool):
                 )
 
                 if result.returncode == 0:
-                    return f"Closed app: {exe_name}"
+                    return f"已关闭应用: {exe_name}"
                 elif result.returncode == 128:  # Process not found
-                    return f"App {exe_name} is not running"
+                    return f"应用 {exe_name} 未在运行"
                 else:
-                    return f"Error closing app: {result.stderr}"
+                    return f"关闭应用失败: {result.stderr}"
 
             elif system == "Linux":
                 result = subprocess.run(
@@ -193,17 +263,17 @@ class AppControlTool(BaseTool):
                 )
 
                 if result.returncode == 0:
-                    return f"Closed app: {app_info}"
+                    return f"已关闭应用: {app_info}"
                 elif result.returncode == 1:  # No process found
-                    return f"App {app_info} is not running"
+                    return f"应用 {app_info} 未在运行"
                 else:
-                    return f"Error closing app: {result.stderr}"
+                    return f"关闭应用失败: {result.stderr}"
 
             else:
-                return f"Not supported operating system: {system}"
+                return f"不支持的操作系统: {system}"
 
         except Exception as e:
-            return f"Error closing app: {str(e)}"
+            return f"关闭应用时发生错误: {str(e)}"
 
 
 def app_control(**kwargs) -> BaseTool:

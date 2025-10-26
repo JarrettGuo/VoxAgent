@@ -34,16 +34,19 @@ class AssistantInitializer:
         if not self._check_config():
             return False
 
-        # 初始化唤醒词检测器
-        if not self._init_wake_word_detector():
+        # 初始化录音器（创建 PyAudio 实例）
+        if not self._init_recorder():
             return False
 
-        # 初始化录音模块
-        if not self._init_recorder():
+        # 初始化唤醒词检测器（共享 PyAudio 实例）
+        if not self._init_wake_word_detector():
             return False
 
         # 初始化 ASR 客户端
         if not self._init_asr():
+            return False
+
+        if not self._init_tts():
             return False
 
         logger.info("All modules initialized successfully")
@@ -86,11 +89,16 @@ class AssistantInitializer:
             keywords = self.config.get("wake_word.keywords", ["computer", "jarvis"])
             sensitivities = self.config.get("wake_word.sensitivities", [0.5])
 
+            # 初始化录音器
+            if not self._init_recorder():
+                return False
+
             self.assistant.detector = WakeWordDetector(
                 access_key=access_key,
                 keywords=keywords,
                 sensitivities=sensitivities,
-                on_wake=self.assistant._on_wake_detected
+                on_wake=self.assistant._on_wake_detected,
+                pa_instance=self.assistant.recorder.pa
             )
 
             logger.info("Wake word detector initialized successfully")
@@ -101,7 +109,7 @@ class AssistantInitializer:
             return False
 
     def _init_recorder(self) -> bool:
-        """初始化录音器"""
+        """初始化录音器（先于唤醒词检测器）"""
         try:
             sample_rate = self.config.get("recording.sample_rate", 16000)
             channels = self.config.get("recording.channels", 1)
@@ -162,4 +170,24 @@ class AssistantInitializer:
                 logger.info("\nTip: Please install dependencies:")
                 logger.info("pip install torch transformers accelerate")
 
+            return False
+
+    def _init_tts(self) -> bool:
+        """初始化 TTS 客户端"""
+        try:
+            from src.services.tts_client import tts_client
+
+            edge_config = self.config.get("tts.edge", {})
+            self.assistant.processor.tts_client = tts_client(
+                voice=edge_config.get("voice", "yunyang"),
+                rate=edge_config.get("rate", "+0%"),
+                volume=edge_config.get("volume", "+0%"),
+                pitch=edge_config.get("pitch", "+0Hz")
+            )
+
+            logger.info("TTS client initialized successfully")
+            return True
+
+        except Exception as e:
+            logger.error(f"TTS client initialization failed: {e}")
             return False

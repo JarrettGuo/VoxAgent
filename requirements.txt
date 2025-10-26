@@ -11,7 +11,12 @@ pvporcupine==3.0.5
 pyaudio==0.2.14
 pydantic==2.12.3
 pydub==0.25.1
+pygame==2.6.1
+pyside6==6.10.0
+pyside6_addons==6.10.0
+pyside6_essentials==6.10.0
 pytest==8.4.2
+python-dotenv==1.1.1
 PyYAML==6.0.3
 Requests==2.32.5
 torch==2.9.0

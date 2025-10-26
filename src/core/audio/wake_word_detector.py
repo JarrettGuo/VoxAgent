@@ -24,7 +24,8 @@ class WakeWordDetector:
             access_key: str,
             keywords: list[str],
             sensitivities: Optional[list[float]] = None,
-            on_wake: Optional[Callable[[int], None]] = None
+            on_wake: Optional[Callable[[int], None]] = None,
+            pa_instance: Optional[pyaudio.PyAudio] = None,
     ):
         """初始化唤醒词检测器"""
         self.keywords = keywords
@@ -43,7 +44,14 @@ class WakeWordDetector:
             logger.error(f"Initializing Porcupine failed: {e}")
             raise
 
-        self.pa = pyaudio.PyAudio()
+        if pa_instance is not None:
+            self.pa = pa_instance
+            self._owns_pa = False
+            logger.debug("Using shared PyAudio instance")
+        else:
+            self.pa = pyaudio.PyAudio()
+            self._owns_pa = True
+            logger.debug("Created new PyAudio instance")
         self.stream: Optional[pyaudio.Stream] = None
 
     def _open_audio_stream(self):
@@ -183,7 +191,7 @@ class WakeWordDetector:
             except Exception as e:
                 logger.error(f"Releasing Porcupine resources failed: {e}")
 
-        if self.pa:
+        if self._owns_pa and self.pa:
             try:
                 self.pa.terminate()
                 logger.info("PyAudio resources released")

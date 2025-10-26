@@ -5,7 +5,7 @@
 @Author : guojarrett@gmail.com
 @File   : assistant.py
 """
-
+import time
 from typing import Optional
 
 from src.core.audio.recorder import AudioRecorder
@@ -20,7 +20,7 @@ class VoiceAssistant:
     """语音助手主类"""
 
     def __init__(self):
-        self.on_message = None # will be assigned automatically by ui
+        self.on_message = None  # will be assigned automatically by ui
         self.config = config
         self.detector: Optional[WakeWordDetector] = None
         self.recorder: Optional[AudioRecorder] = None
@@ -54,8 +54,40 @@ class VoiceAssistant:
 
         # 获取唤醒词
         keywords = self.config.get("wake_word.keywords", [])
+        detected_keyword = keywords[keyword_index] if keyword_index < len(keywords) else "unknown"
 
-        # 处理用户指令
+        logger.info(f"Detected wake word: '{detected_keyword}'")
+
+        # 1. 先暂停唤醒词检测
+        if self.detector and self.detector._is_running:
+            logger.debug("Pausing wake word detector before confirmation...")
+            self.detector.pause()
+            time.sleep(0.3)
+
+        # 2. 确保 TTS 客户端已初始化
+        if not self.processor.tts_client:
+            logger.info("TTS client not initialized, initializing now...")
+            try:
+                from src.services.tts_client import tts_client
+                edge_config = self.config.get("tts.edge", {})
+                self.processor.tts_client = tts_client(
+                    voice=edge_config.get("voice", "yunyang"),
+                    rate=edge_config.get("rate", "+0%"),
+                    volume=edge_config.get("volume", "+0%"),
+                    pitch=edge_config.get("pitch", "+0Hz")
+                )
+                logger.info("TTS client initialized successfully")
+            except Exception as e:
+                logger.error(f"Failed to initialize TTS client: {e}")
+
+        # 3. 播放确认音
+        self.processor._play_wake_confirmation()
+
+        # 4. 等待
+        logger.debug("Waiting for user to prepare...")
+        time.sleep(0.5)
+
+        # 5. 处理用户指令
         self.processor.process_command(self.on_message)
 
     def run(self):

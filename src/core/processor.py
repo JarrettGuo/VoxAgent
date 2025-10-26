@@ -7,7 +7,7 @@
 """
 
 import time
-from typing import TYPE_CHECKING, Dict, Any, Optional, List
+from typing import TYPE_CHECKING, Dict, Any, Optional, List, Callable
 
 from src.core.agent.agents.base_agent import BaseAgent
 from src.core.agent.agents.error_analyzer_agent import ErrorAnalyzerAgent
@@ -145,23 +145,33 @@ class CommandProcessor:
             logger.error(f"System initialization failed: {e}", exc_info=True)
             return False
 
-    def process_command(self, callback):
-        """处理用户指令的主流程（支持多轮对话）"""
-        self.assistant.is_processing = True
+    def process_command(self, callback: Optional[Callable] = None):
+        """处理语音指令的主流程"""
+        # 系统初始化检查
+        if not self._initialized:
+            if not self._initialize_system():
+                self._simple_tts_feedback("系统初始化失败，请重启程序")
+                return
+
+        # 检查检测器状态（允许已暂停的状态）
+        if not self.assistant.detector:
+            logger.warning("Detector not initialized, cannot process command")
+            return
+
+        # 只检查是否运行或已暂停，两者之一即可
+        if not self.assistant.detector._is_running and not self.assistant.detector._is_paused:
+            logger.warning("Detector not active, cannot process command")
+            return
 
         try:
-            if not self._initialized:
-                if not self._initialize_system():
-                    self._simple_tts_feedback("系统初始化失败，请稍后重试")
-                    return
+            # 标记正在处理
+            self.assistant.is_processing = True
 
-            # 暂停唤醒词检测
-            self.assistant.detector.pause()
-            time.sleep(0.2)
-
-            # 播放唤醒确认
-            if not self.conversation_manager.state["active"]:
-                self._play_wake_confirmation()
+            # 只在检测器还在运行时才暂停（避免重复暂停）
+            if self.assistant.detector._is_running and not self.assistant.detector._is_paused:
+                logger.debug("Pausing detector in process_command...")
+                self.assistant.detector.pause()
+                time.sleep(0.2)  # 等待检测器完全停止
 
             # 1. 录音
             audio_data = self.audio_handler.record_audio()
@@ -211,36 +221,19 @@ class CommandProcessor:
             if callback is not None:
                 callback(f"当前输入: {text}")
 
-            logger.info(f"📝 Recognized text: {text}")
-
-            # 3. 理解意图并规划任务（使用 PlannerAgent）
-            execution_plan = self._understand_and_plan(text)
+            logger.info(f"Recognized text: {text}")
 
             # 成功识别，清空计数
             if self.conversation_manager.state["active"]:
                 self.conversation_manager.state["empty_text_retries"] = 0
 
-            if callback is not None:
-                plans = [ plan.description for plan in execution_plan.tasks]
-                output = '\n'.join(plans)
-                callback(f"已生成计划:\n {output}")
-
-            # 4. 执行任务计划（使用 TaskOrchestrator）
-            execution_result = self._execute_plan(execution_plan)
-
-            # 3. 处理查询
+            # 3. 处理查询（规划和执行都在这里面完成）
             if self.conversation_manager.state["active"]:
                 self._handle_follow_up_input(text)
             else:
                 self._handle_new_query(text)
 
-            if callback is not None:
-                callback(f"处理结果: {execution_result['summary']}")
-
-            # 5. 语音反馈
-            self._text_to_speech(execution_result['summary'])
-
-            logger.info("✅ Processing completed")
+            logger.info("Processing completed")
 
         except Exception as e:
             logger.error(f"Processing failed: {e}")
@@ -274,14 +267,9 @@ class CommandProcessor:
     def _handle_new_query(self, text: str):
         """处理新的用户查询"""
         self.conversation_manager.start_new_query(text)
-
         self._play_processing_prompt()
 
-        execution_plan = self._understand_and_plan(
-            text=text,
-            conversation_history=None
-        )
-
+        execution_plan = self._understand_and_plan(text=text, conversation_history=None)
         execution_result = self._execute_plan(execution_plan)
 
         if self._is_execution_successful(execution_result):
@@ -289,6 +277,7 @@ class CommandProcessor:
         else:
             if self._should_retry_with_conversation(execution_result, text):
                 self._start_conversation(execution_plan, execution_result)
+                return
             else:
                 self._finish_execution_with_error(text, execution_plan, execution_result)
 
@@ -579,13 +568,22 @@ class CommandProcessor:
         import random
         prompt = random.choice(self.voice_prompts["wake"])
         logger.info(f"Wake confirmation: {prompt}")
+
+        # ⚠️ 添加调试日志
+        if not self.tts_client:
+            logger.error("TTS client not initialized!")
+            logger.info(f"Fallback: {prompt}")
+            return
+
         try:
-            if self.tts_client:
-                self.tts_client.speak(prompt)
-            else:
-                logger.info(f"{prompt}")
+            logger.info(f"TTS client: {self.tts_client}")
+            logger.info(f"Playing audio: {prompt}")
+            self.tts_client.speak(prompt)
+            logger.info("Playback completed successfully")
         except Exception as e:
             logger.error(f"Wake confirmation TTS failed: {e}")
+            import traceback
+            traceback.print_exc()
 
     def _play_processing_prompt(self):
         """播放处理中提示语音"""

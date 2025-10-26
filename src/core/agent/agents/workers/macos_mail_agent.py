@@ -8,7 +8,7 @@ from src.core.agent.entities.agent_prompts import MAC_MAIL_AGENT_PROMPT
 
 class MacMailAgent(
     BaseAgent,
-    agent_type="macos_music",
+    agent_type="macos_mail",
     priority=80,  # High priority - frequently used
     platforms=["darwin"],
     required_tools=["mail_search", "mail_read"],
