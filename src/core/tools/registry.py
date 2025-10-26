@@ -11,11 +11,13 @@ from typing import Dict, List, Optional
 
 from langchain_core.tools import BaseTool
 
+from src.core.tools import dalle3
 # 导入工具
 from src.core.tools.file import (
     file_create, file_read, file_search, file_list,
     file_find_recent, file_delete, file_append, file_write
 )
+from src.core.tools.image import image_download
 from src.core.tools.search import duckduckgo_search, wikipedia_search, google_serper
 from src.core.tools.system import app_control
 from src.core.tools.weather import gaode_weather

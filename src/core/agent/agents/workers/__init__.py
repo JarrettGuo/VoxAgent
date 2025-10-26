@@ -6,9 +6,13 @@
 #     importlib.import_module(f"{__name__}.{module_name}")
 
 from .file_agent import FileManagementAgent
+from .image_agent import ImageGenAgent
 from .search_agent import SearchAgent
+from .weather_agent import WeatherAgent
 
 __all__ = [
     'FileManagementAgent',
     'SearchAgent',
+    'WeatherAgent',
+    'ImageGenAgent',
 ]

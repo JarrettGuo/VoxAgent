@@ -19,6 +19,7 @@ class WeatherAgent(
     agent_description = (
         "负责天气信息的查询"
         "适用场景：查天气预报等"
+        "这个 Agent 只适用查询国内城市的天气信息，不支持国际城市。"
     )
     agent_system_prompt = """你是一个天气信息专家。"""
 

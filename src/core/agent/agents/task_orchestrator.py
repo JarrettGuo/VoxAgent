@@ -195,9 +195,7 @@ class TaskOrchestrator:
 
     def execute(self, plan: Dict[str, Any]) -> Dict[str, Any]:
         """执行计划（外部接口）"""
-        logger.info("=" * 70)
         logger.info("Starting TaskOrchestrator execution")
-        logger.info("=" * 70)
 
         # 创建初始状态
         initial_state = ExecutionState(
@@ -215,9 +213,7 @@ class TaskOrchestrator:
         # 生成摘要
         summary = self._generate_summary(final_state)
 
-        logger.info("=" * 70)
         logger.info(f"Execution complete: {summary['message']}")
-        logger.info("=" * 70)
 
         return summary
 
