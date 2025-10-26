@@ -20,6 +20,7 @@ class VoiceAssistant:
     """语音助手主类"""
 
     def __init__(self):
+        self.on_message = None # will be assigned automatically by ui
         self.config = config
         self.detector: Optional[WakeWordDetector] = None
         self.recorder: Optional[AudioRecorder] = None
@@ -55,7 +56,7 @@ class VoiceAssistant:
         keywords = self.config.get("wake_word.keywords", [])
 
         # 处理用户指令
-        self.processor.process_command()
+        self.processor.process_command(self.on_message)
 
     def run(self):
         """运行助手"""
