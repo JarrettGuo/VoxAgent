@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import pytest
 from langchain_openai import ChatOpenAI
 
@@ -9,7 +12,6 @@ from src.utils.langsmith_setup import setup_langsmith
 
 @pytest.fixture
 def mock_agent():
-    from src.core.agent.agents.workers.search_agent import SearchAgent
     qiniu_config = config.get("qiniu")
     llm = ChatOpenAI(
         api_key=qiniu_config.get("api_key"),
@@ -19,6 +21,7 @@ def mock_agent():
         max_tokens=qiniu_config.get("llm", {}).get("max_tokens", 2000),
     )
     return ImageGenAgent(tool_manager=tool_registry, llm=llm)
+
 
 def test_weather_agent_run(mock_agent):
     setup_langsmith()

@@ -28,44 +28,48 @@ class LLMFactory:
             logger.debug(f"Using cached {llm_type} LLM")
             return cls._instances[llm_type]
 
+        api_key = config.get('qiniu.api_key')
+        base_url = config.get('qiniu.base_url')
+
+        model = config.get(f'qiniu.models.{llm_type}.model')
+        temperature = config.get(f'qiniu.models.{llm_type}.temperature', 0.0)
+        max_tokens = config.get(f'qiniu.models.{llm_type}.max_tokens', 500)
+
         # 获取基础配置
-        qiniu_config = config.get("qiniu")
-        if not qiniu_config:
-            raise ValueError("Qiniu config not found")
-
-        # 获取模型特定配置
-        model_config = config.get(f"qiniu.models.{llm_type}")
-
-        if not model_config:
-            logger.warning(
-                f"No specific config for {llm_type}, using default worker config"
-            )
-            model_config = {
-                "model": "qwen3-max-preview",
-                "temperature": 0.0,
-                "max_tokens": 500
+        if not model:
+            logger.warning(f"No config for {llm_type}, using defaults")
+            defaults = {
+                'planner': ('qwen3-max', 0.0, 500),
+                'worker': ('qwen3-next-80b-a3b-instruct', 0.0, 300),
+                'summary': ('qwen3-next-80b-a3b-instruct', 0.3, 200),
             }
+            model, temperature, max_tokens = defaults.get(
+                llm_type,
+                ('qwen3-next-80b-a3b-instruct', 0.0, 500)
+            )
 
-        # 创建实例
-        llm = ChatOpenAI(
-            api_key=qiniu_config.get("api_key"),
-            base_url=qiniu_config.get("base_url"),
-            model=model_config.get("model"),
-            temperature=model_config.get("temperature", 0.0),
-            max_tokens=model_config.get("max_tokens", 500),
-        )
+        try:
+            llm = ChatOpenAI(
+                api_key=api_key,
+                base_url=base_url,
+                model=model,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
 
-        # 缓存实例
-        cls._instances[llm_type] = llm
+            # 缓存实例
+            cls._instances[llm_type] = llm
 
-        logger.info(
-            f"Created {llm_type} LLM: "
-            f"model={model_config.get('model')}, "
-            f"temp={model_config.get('temperature')}, "
-            f"max_tokens={model_config.get('max_tokens')}"
-        )
+            logger.info(
+                f"Created {llm_type} LLM: "
+                f"model={model}, temp={temperature}, max_tokens={max_tokens}"
+            )
 
-        return llm
+            return llm
+
+        except Exception as e:
+            logger.error(f"Failed to create {llm_type} LLM: {e}")
+            raise
 
     @classmethod
     def _create_ollama_llm(cls) -> ChatOpenAI:

@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import pytest
 from langchain_openai import ChatOpenAI
 
@@ -7,6 +10,7 @@ from src.utils.config import config
 
 class MockLLM:
     """A mock LLM that simulates structured tool calls."""
+
     def predict(self, *args, **kwargs):
         return (
             "Action: wikipedia_search\n"
@@ -16,8 +20,10 @@ class MockLLM:
     def __call__(self, *args, **kwargs):
         return self.predict(*args, **kwargs)
 
+
 class MockTool:
     """Simulate a LangChain Tool."""
+
     def __init__(self, name, output):
         self.name = name
         self.output = output
@@ -38,6 +44,7 @@ def mock_agent():
         max_tokens=qiniu_config.get("llm", {}).get("max_tokens", 2000),
     )
     return SearchAgent(tool_manager=tool_registry, llm=llm)
+
 
 def test_search_agent_run(mock_agent):
     query = "Search for Python programming language"

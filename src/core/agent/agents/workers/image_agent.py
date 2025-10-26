@@ -1,9 +1,12 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 from typing import List
 
 from langchain_core.tools import BaseTool
 
 from src.core.agent.agents.base_agent import BaseAgent
-from src.core.agent.entities.agent_prompts import FILE_MANAGEMENT_AGENT_PROMPT, IMAGE_GEN_AGENT_PROMPT
+from src.core.agent.entities.agent_prompts import IMAGE_GEN_AGENT_PROMPT
 
 
 class ImageGenAgent(

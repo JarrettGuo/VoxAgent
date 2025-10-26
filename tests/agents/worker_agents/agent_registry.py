@@ -1,10 +1,13 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import sys
 
+from langchain_openai import ChatOpenAI
 from src.core.agent.agents.workers.base_worker_agent import BaseWorkerAgent
+
 from src.core.tools import tool_registry
 from src.utils.config import config
-from langchain_openai import ChatOpenAI
-
 from src.utils.logger import logger
 
 
@@ -26,7 +29,8 @@ def main():
     all_agents = {name: cls(llm=llm, tool_manager=tool_registry) for name, cls in registry.items()}
     logger.info(f"Initialized agents: {all_agents}")
 
-    logger.info(f"{[ agent.get_ability_info() for agent in all_agents.values()]}")
+    logger.info(f"{[agent.get_ability_info() for agent in all_agents.values()]}")
+
 
 if __name__ == '__main__':
     sys.exit(main())

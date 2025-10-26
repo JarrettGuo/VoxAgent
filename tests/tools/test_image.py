@@ -1,6 +1,5 @@
-import os
-import shutil
-import tempfile
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
 
 from src.core.tools import tool_registry
 from src.utils.logger import logger

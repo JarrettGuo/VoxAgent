@@ -1,10 +1,16 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
+from langchain_core.language_models import BaseChatModel
 from langchain_core.tools import BaseTool
 
 from src.core.agent.agents.base_agent import BaseAgent
+from src.core.agent.entities.agent_entity import AgentConfig
 from src.core.agent.entities.agent_prompts import FILE_MANAGEMENT_AGENT_PROMPT
+from src.core.tools import ToolRegistry
 from src.utils.logger import logger
 
 
@@ -23,8 +29,13 @@ class FileManagementAgent(
     )
     agent_system_prompt = """你是一个专业的文件管理助手，负责帮助用户完成文件操作任务。"""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(
+            self,
+            llm: BaseChatModel,
+            tool_manager: ToolRegistry,
+            config: Optional[AgentConfig] = None
+    ):
+        super().__init__(llm, tool_manager, config)
         # 定义常用目录映射
         self.common_dirs = {
             "桌面": self._get_desktop_path(),

@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 from typing import List
 
 from langchain_core.tools import BaseTool
@@ -17,7 +20,7 @@ class WeatherAgent(
 
     agent_name = "weather_agent"
     agent_description = (
-        "负责天气信息的查询"
+        "负责中国大陆的天气信息的查询"
         "适用场景：查天气预报等"
         "这个 Agent 只适用查询国内城市的天气信息，不支持国际城市。"
     )

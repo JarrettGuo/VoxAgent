@@ -8,7 +8,6 @@ audio:
 # 唤醒词配置
 wake_word:
   enabled: true
-  access_key: "dW07kP/0JEak6UJdk/r8j0UmKoUxb4WCR8eSjIzN1PhYWJqHYrAkQw=="
   keywords:
     - "computer"
     - "jarvis"
@@ -27,8 +26,6 @@ langsmith:
   enabled: true
   tracing: true
   endpoint: "https://api.smith.langchain.com"
-  api_key: "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"
-  project: "voxagent-project"
 
 # ASR 配置
 asr:
@@ -42,15 +39,12 @@ asr:
 
 # 高德天气配置
 gaode_weather:
-  api_key: "8cb1eee602cd28b29eba5d27c9d4d569"
 
 # OpenAI 配置
 openai:
-  api_key: "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"
 
 # 七牛云配置
 qiniu:
-  api_key: "sk-ee25dd68d59b66e45d4ed087ceb6c8e30ab0f08f4294908be20a41da14aded3b"
   base_url: "https://openai.qiniu.com/v1"
   models:
     # 大模型 - 用于复杂推理（Planner）
@@ -102,7 +96,6 @@ agent:
 
 # Google Serper 配置
 google_serper:
-  api_key: "b811356b2cc9edb2feff14c7e325c0eeef646844"
 
 # ollama 配置
 ollama:

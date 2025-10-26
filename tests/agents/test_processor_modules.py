@@ -21,10 +21,6 @@ from src.core.processor_modules import (
 )
 
 
-# ============================================================================
-# AudioHandler 核心测试
-# ============================================================================
-
 class TestAudioHandler:
     """AudioHandler 核心功能测试"""
 
@@ -109,10 +105,6 @@ class TestAudioHandler:
         return wav_buffer.read()
 
 
-# ============================================================================
-# ConversationManager 核心测试
-# ============================================================================
-
 class TestConversationManager:
     """ConversationManager 核心功能测试"""
 
@@ -169,10 +161,6 @@ class TestConversationManager:
         }
         assert manager.needs_more_info(result) is False
 
-
-# ============================================================================
-# ErrorHandler 核心测试
-# ============================================================================
 
 class TestErrorHandler:
     """ErrorHandler 核心功能测试"""
@@ -251,10 +239,6 @@ class TestErrorHandler:
         assert isinstance(question, str)
         assert len(question) > 0
 
-
-# ============================================================================
-# 集成测试
-# ============================================================================
 
 class TestIntegration:
     """模块集成测试"""

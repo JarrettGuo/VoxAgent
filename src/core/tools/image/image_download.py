@@ -1,8 +1,11 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import time
+from pathlib import Path
 from typing import Type, Optional
 
 import requests
-from pathlib import Path
 from langchain_core.tools import BaseTool
 
 from src.core.tools.base.schemas import ImageDownloadSchema
@@ -54,6 +57,7 @@ class ImageDownloadTool(BaseTool):
     ) -> str:
         """异步版本"""
         return self._run(url, filename)
+
 
 def image_download() -> BaseTool:
     """工厂函数：创建图片下载工具"""

@@ -9,8 +9,6 @@
 import time
 from typing import TYPE_CHECKING, Dict, Any, Optional, List
 
-from langchain_openai import ChatOpenAI
-
 from src.core.agent.agents.base_agent import BaseAgent
 from src.core.agent.agents.error_analyzer_agent import ErrorAnalyzerAgent
 from src.core.agent.agents.planner_agent import PlannerAgent
@@ -539,24 +537,18 @@ class CommandProcessor:
     def _create_llm(self):
         """创建 LLM 实例"""
         try:
-            qiniu_config = self.config.get("qiniu")
-            if qiniu_config:
-                llm = ChatOpenAI(
-                    api_key=qiniu_config.get("api_key"),
-                    base_url=qiniu_config.get("base_url"),
-                    model=qiniu_config.get("llm", {}).get("model", "gpt-4o-mini"),
-                    temperature=qiniu_config.get("llm", {}).get("temperature", 0.7),
-                    max_tokens=qiniu_config.get("llm", {}).get("max_tokens", 2000),
-                )
-                logger.info("LLM created from Qiniu config")
-                return llm
+            # 直接使用 LLMFactory
+            from src.services.LLMFactory import LLMFactory
 
-        except ImportError:
-            logger.warning("langchain_openai not installed")
+            llm = LLMFactory.get_worker_llm()
+            logger.info("LLM created successfully via LLMFactory")
+            return llm
+
         except Exception as e:
             logger.error(f"Failed to create LLM: {e}")
-
-        return None
+            import traceback
+            traceback.print_exc()
+            return None
 
     def _play_wake_confirmation(self):
         """播放唤醒确认语音"""
