@@ -12,10 +12,20 @@ from .file_agent import FileManagementAgent
 from .image_agent import ImageGenAgent
 from .search_agent import SearchAgent
 from .weather_agent import WeatherAgent
+from .macos_mail_agent import MacMailAgent
+from .macos_music_agent import MacMusicAgent
+from .app_agent import AppAgent
+from .windows_mail_agent import WinMailAgent
+from .windows_music_agent import WinMusicAgent
 
 __all__ = [
     'FileManagementAgent',
     'SearchAgent',
     'WeatherAgent',
     'ImageGenAgent',
+    'MacMusicAgent',
+    'MacMailAgent',
+    'WinMusicAgent',
+    'WinMailAgent',
+    'AppAgent'
 ]

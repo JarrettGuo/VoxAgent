@@ -146,8 +146,6 @@ class CommandProcessor:
             return False
 
     def process_command(self, callback):
-        """处理用户指令的主流程"""
-    def process_command(self):
         """处理用户指令的主流程（支持多轮对话）"""
         self.assistant.is_processing = True
 
@@ -184,7 +182,7 @@ class CommandProcessor:
                     self.conversation_manager.state["empty_audio_retries"] = retry_count + 1
                     self._simple_tts_feedback("没有听到声音，请再说一次")
                     time.sleep(0.5)
-                    return self.process_command()  # 递归重试
+                    return self.process_command(callback)  # 递归重试
                 return
 
             # 成功录音，清空重试计数
@@ -207,10 +205,11 @@ class CommandProcessor:
                     self.conversation_manager.state["empty_text_retries"] = retry_count + 1
                     self._simple_tts_feedback("没有听清楚，请再说一次")
                     time.sleep(0.5)
-                    return self.process_command()
+                    return self.process_command(callback)
                 return
+
             if callback is not None:
-                callback(f"User Input: {text}")
+                callback(f"当前输入: {text}")
 
             logger.info(f"📝 Recognized text: {text}")
 
@@ -220,10 +219,11 @@ class CommandProcessor:
             # 成功识别，清空计数
             if self.conversation_manager.state["active"]:
                 self.conversation_manager.state["empty_text_retries"] = 0
+
             if callback is not None:
                 plans = [ plan.description for plan in execution_plan.tasks]
                 output = '\n'.join(plans)
-                callback(f"Plan Generated:\n {output}")
+                callback(f"已生成计划:\n {output}")
 
             # 4. 执行任务计划（使用 TaskOrchestrator）
             execution_result = self._execute_plan(execution_plan)
@@ -233,11 +233,12 @@ class CommandProcessor:
                 self._handle_follow_up_input(text)
             else:
                 self._handle_new_query(text)
+
             if callback is not None:
-                callback(f"Executed: {execution_result}")
+                callback(f"处理结果: {execution_result['summary']}")
 
             # 5. 语音反馈
-            self._text_to_speech(execution_result)
+            self._text_to_speech(execution_result['summary'])
 
             logger.info("✅ Processing completed")
 
@@ -262,7 +263,7 @@ class CommandProcessor:
                     # 继续对话
                     logger.info("Conversation active, continuing to listen...")
                     time.sleep(0.5)
-                    self.process_command()
+                    self.process_command(callback)
             else:
                 # 对话结束，恢复唤醒词检测
                 time.sleep(0.3)

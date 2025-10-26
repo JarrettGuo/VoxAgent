@@ -79,6 +79,7 @@ class AssistantWindow(QMainWindow):
     def __init__(self, voice_assistant, w, h):
         super().__init__()
         self.setWindowTitle("Desktop Assistant")
+        self.setWindowFlags(Qt.WindowType.WindowStaysOnTopHint)
         self.resize(400, 500)
 
         # Voice assistant integration
