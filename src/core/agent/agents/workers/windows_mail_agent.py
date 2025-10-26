@@ -3,7 +3,7 @@ from typing import List
 from langchain_core.tools import BaseTool
 
 from src.core.agent.agents.base_agent import BaseAgent
-from src.core.agent.entities.agent_prompts import WINDOWS_MAIL_AGENT_PROMPT
+from src.core.agent.entities.agent_prompts import WINDOWS_MAIL_AGENT_PROMPT, create_platform_prompt
 
 
 class WinMailAgent(
@@ -33,6 +33,6 @@ class WinMailAgent(
 
         tools_section = "\n".join(tool_descriptions)
 
-        prompt_template = WINDOWS_MAIL_AGENT_PROMPT
+        prompt_template = create_platform_prompt(WINDOWS_MAIL_AGENT_PROMPT, 'mail', 'windows')
 
         return prompt_template.format(tools_section=tools_section)

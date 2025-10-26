@@ -3,7 +3,7 @@ from typing import List
 from langchain_core.tools import BaseTool
 
 from src.core.agent.agents.base_agent import BaseAgent
-from src.core.agent.entities.agent_prompts import MAC_MAIL_AGENT_PROMPT
+from src.core.agent.entities.agent_prompts import create_platform_prompt, MAIL_AGENT_PROMPT
 
 
 class MacMailAgent(
@@ -33,6 +33,6 @@ class MacMailAgent(
 
         tools_section = "\n".join(tool_descriptions)
 
-        prompt_template = MAC_MAIL_AGENT_PROMPT
+        prompt_template = create_platform_prompt(MAIL_AGENT_PROMPT, 'mail', 'mac')
 
         return prompt_template.format(tools_section=tools_section)
