@@ -18,10 +18,10 @@ class VoiceAssistantWorker(QObject):
         self.initialization_complete.emit(success)
 
         if not success:
-            self.status_update.emit("❌ Initialization failed")
+            self.status_update.emit("❌ 初始化失败")
             return
 
-        self.status_update.emit("✨ Voice Assistant ready!")
+        self.status_update.emit("✨ 准备就绪!")
 
         # Inject message callback into assistant
         self.voice_assistant.on_message = self.handle_assistant_message
