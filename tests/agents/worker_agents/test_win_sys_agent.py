@@ -14,7 +14,7 @@ def mail_agent():
     llm = ChatOpenAI(
         api_key=qiniu_config.get("api_key"),
         base_url=qiniu_config.get("base_url"),
-        model=qiniu_config.get("llm", {}).get("model", "gpt-4o-mini"),
+        model=qiniu_config.get("llm", {}).get("model", "qwen3-next-80b-a3b-instruct"),
         temperature=qiniu_config.get("llm", {}).get("temperature", 0.7),
         max_tokens=qiniu_config.get("llm", {}).get("max_tokens", 2000),
     )
@@ -26,7 +26,7 @@ def music_agent():
     llm = ChatOpenAI(
         api_key=qiniu_config.get("api_key"),
         base_url=qiniu_config.get("base_url"),
-        model=qiniu_config.get("llm", {}).get("model", "gpt-4o-mini"),
+        model=qiniu_config.get("llm", {}).get("model", "qwen3-next-80b-a3b-instruct"),
         temperature=qiniu_config.get("llm", {}).get("temperature", 0.7),
         max_tokens=qiniu_config.get("llm", {}).get("max_tokens", 2000),
     )
@@ -35,6 +35,38 @@ def music_agent():
 def test_music_agent_run(music_agent):
     setup_langsmith()
     query = "我想听天天这首歌"
+    result = music_agent.invoke({
+        "user_input": query
+    })
+
+    print("✅ MusicAgent returned:", result)
+
+    query = "停止播放"
+    result = music_agent.invoke({
+        "user_input": query
+    })
+
+    print("✅ MusicAgent returned:", result)
+
+def test_music_agent_typo(music_agent):
+    setup_langsmith()
+    query = "我想听小真姑娘这首歌"
+    result = music_agent.invoke({
+        "user_input": query
+    })
+
+    print("✅ MusicAgent returned:", result)
+
+    query = "停止播放"
+    result = music_agent.invoke({
+        "user_input": query
+    })
+
+    print("✅ MusicAgent returned:", result)
+
+def test_music_agent_random(music_agent):
+    setup_langsmith()
+    query = "任意播放一首歌"
     result = music_agent.invoke({
         "user_input": query
     })

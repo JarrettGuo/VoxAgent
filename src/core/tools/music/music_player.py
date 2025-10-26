@@ -68,8 +68,6 @@ class MusicPlayer:
                 if file_path.suffix.lower() in self.SUPPORTED_FORMATS:
                     self.music_library.append(file_path)
 
-        print(f"音乐库已索引: 找到 {len(self.music_library)} 首歌曲")
-
     def search(self, query: str, limit: int = 5) -> List[Path]:
         """搜索音乐文件"""
         query_lower = query.lower()
@@ -136,3 +134,6 @@ class MusicPlayer:
             return f"正在播放: {self.current_song.stem}"
 
         return f"当前歌曲: {self.current_song.stem} (已结束)"
+
+    def get_song_list(self):
+        return self.music_library

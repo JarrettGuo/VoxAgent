@@ -154,7 +154,8 @@ class ToolRegistry:
             "macos_mail": ["mail_search", "mail_read"],
             "macos_music": ["music_play", "music_control", "music_search"],
             "windows_mail": ["outlook_search", "outlook_read"],
-            "windows_music": ["pygame_music_play", "pygame_music_control", "pygame_music_search"],
+            "windows_music": ["pygame_music_play", "pygame_music_control", "pygame_music_search",
+                              "pygame_music_fetch"],
         }
 
         tool_names = category_map.get(category, [])
@@ -198,7 +199,7 @@ class ToolRegistry:
         try:
             from src.core.tools.system.windows import (
                 outlook_send, outlook_read, outlook_search,
-                pygame_music_search, pygame_music_play, pygame_music_control
+                pygame_music_search, pygame_music_play, pygame_music_control, pygame_music_fetch
             )
 
             # 邮件工具
@@ -210,6 +211,7 @@ class ToolRegistry:
             self.register(pygame_music_search())
             self.register(pygame_music_play())
             self.register(pygame_music_control())
+            self.register(pygame_music_fetch())
 
             logger.info("windows tools registered")
 

@@ -11,7 +11,7 @@ class WinMusicAgent(
     agent_type="windows_music",
     priority=80,  # High priority - frequently used
     platforms=["windows"],
-    required_tools=["pygame_music_play", "pygame_music_control", "pygame_music_search"],
+    required_tools=["pygame_music_play", "pygame_music_control", "pygame_music_search", "pygame_music_fetch"],
 ):
     """Windows Music Agent"""
 

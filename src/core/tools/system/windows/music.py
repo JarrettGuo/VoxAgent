@@ -1,8 +1,9 @@
-from typing import Type, Any
+from typing import Type, Any, Optional
 
 from src.core.tools.base import PygameSearchSchema, PygameControlSchema, PygamePlaySchema
-from src.core.tools.system.windows.base import WindowsBaseTool, BaseMusicTool
-
+from src.core.tools.base.windows_schemas import PygameFetchSchema
+from src.core.tools.system.windows.base import BaseMusicTool
+from rapidfuzz import process
 
 
 class MusicPlayTool(BaseMusicTool):
@@ -68,7 +69,7 @@ class MusicSearchTool(BaseMusicTool):
     """音乐搜索工具"""
 
     name: str = "pygame_music_search"
-    description: str = "在本地音乐库中搜索歌曲"
+    description: str = "搜索歌曲"
     args_schema: Type[PygameSearchSchema] = PygameSearchSchema
 
     def _run(self, query: str, limit: int = 5, **kwargs: Any) -> str:
@@ -95,6 +96,49 @@ class MusicSearchTool(BaseMusicTool):
             return f"搜索失败: {str(e)}"
 
 
+class MusicFetchTool(BaseMusicTool):
+    """音乐搜索工具"""
+
+    name: str = "pygame_music_fetch"
+    description: str = "获取本地音乐库中的歌曲列表或根据歌名查询相近歌曲"
+    args_schema: Type[PygameFetchSchema] = PygameFetchSchema
+
+    def _run(self, limit: int = 10, query: Optional[str] = None) -> str:
+        """搜索音乐"""
+        try:
+            song_list = self.player.get_song_list()
+            song_list = [str(song) for song in song_list]
+
+            if query is None:
+                result_lines = ["获取结果:"]
+                for i, song_name in enumerate(song_list):
+                    if i >= 20:
+                        break
+                    result_lines.append(
+                        f"{i}. {song_name}"
+                    )
+                return "\n".join(result_lines)
+
+            results = process.extract(
+                query=query,
+                choices=song_list,
+                limit=limit
+            )
+            if not results:
+                return "未找到歌曲"
+
+            result_lines = ["获取结果:"]
+            for i, song_name in enumerate(results):
+                result_lines.append(
+                    f"{i}. {song_name}"
+                )
+
+            return "\n".join(result_lines)
+
+        except Exception as e:
+            return f"获取失败: {str(e)}"
+
+
 # Factory Functions
 def pygame_music_play(**kwargs) -> BaseMusicTool:
     """工厂函数：创建音乐播放工具"""
@@ -109,3 +153,8 @@ def pygame_music_control(**kwargs) -> BaseMusicTool:
 def pygame_music_search(**kwargs) -> BaseMusicTool:
     """工厂函数：创建音乐搜索工具"""
     return MusicSearchTool(**kwargs)
+
+
+def pygame_music_fetch(**kwargs) -> BaseMusicTool:
+    """工厂函数：创建音乐搜索工具"""
+    return MusicFetchTool(**kwargs)
