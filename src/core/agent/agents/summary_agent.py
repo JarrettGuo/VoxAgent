@@ -16,17 +16,10 @@ from src.utils.logger import logger
 
 
 class SummaryAgent:
-    """
-    结果总结 Agent - 将执行结果转换为用户友好的自然语言
-    """
+    """结果总结 Agent - 将执行结果转换为用户友好的自然语言"""
 
     def __init__(self, llm: BaseChatModel):
-        """
-        初始化总结 Agent
-
-        Args:
-            llm: 语言模型实例
-        """
+        """初始化总结 Agent"""
         self.llm = llm
         logger.info("SummarizerAgent initialized")
 
@@ -35,16 +28,7 @@ class SummaryAgent:
             original_query: str,
             execution_summary: Dict[str, Any]
     ) -> str:
-        """
-        异步总结执行结果
-
-        Args:
-            original_query: 用户原始问题
-            execution_summary: TaskOrchestrator 返回的执行摘要
-
-        Returns:
-            用户友好的总结文本
-        """
+        """异步总结执行结果"""
         try:
             # 构建输入
             input_data = self._format_input(original_query, execution_summary)
@@ -71,16 +55,7 @@ class SummaryAgent:
             original_query: str,
             execution_summary: Dict[str, Any]
     ) -> str:
-        """
-        同步总结执行结果
-
-        Args:
-            original_query: 用户原始问题
-            execution_summary: TaskOrchestrator 返回的执行摘要
-
-        Returns:
-            用户友好的总结文本
-        """
+        """同步总结执行结果"""
         import asyncio
         return asyncio.run(self.summarize(original_query, execution_summary))
 

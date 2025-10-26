@@ -37,7 +37,7 @@ class AudioRecorder:
         self.stream: Optional[pyaudio.Stream] = None
         self.frames = []
 
-        logger.info("✅ Recorder initialized successfully")
+        logger.info("Recorder initialized successfully")
 
     def start_recording(self):
         """开始录音"""
@@ -56,10 +56,10 @@ class AudioRecorder:
                 frames_per_buffer=self.chunk_size
             )
 
-            logger.info("🎙️  Started recording...")
+            logger.info("Started recording...")
 
         except Exception as e:
-            logger.error(f"❌ Failed to start recording: {e}")
+            logger.error(f"Failed to start recording: {e}")
             raise
 
     def record_chunk(self) -> bytes:
@@ -72,7 +72,7 @@ class AudioRecorder:
             self.frames.append(data)
             return data
         except Exception as e:
-            logger.error(f"❌ Failed to record chunk: {e}")
+            logger.error(f"Failed to record chunk: {e}")
             raise
 
     def stop_recording(self) -> bytes:
@@ -94,7 +94,7 @@ class AudioRecorder:
             return audio_data
 
         except Exception as e:
-            logger.error(f"❌ Failed to stop recording: {e}")
+            logger.error(f"Failed to stop recording: {e}")
             raise
         finally:
             self.stream = None
@@ -137,13 +137,13 @@ class AudioRecorder:
 
             # 检查结果是否有效
             if np.isnan(rms) or np.isinf(rms):
-                logger.warning(f"⚠️  Invalid RMS value detected, returning 0.0")
+                logger.warning(f"Invalid RMS value detected, returning 0.0")
                 return 0.0
 
             return float(rms)
 
         except Exception as e:
-            logger.warning(f"⚠️  Error calculating RMS: {e}, returning 0.0")
+            logger.warning(f"Error calculating RMS: {e}, returning 0.0")
             return 0.0
 
     def record_with_silence_detection(
@@ -156,7 +156,7 @@ class AudioRecorder:
             min_speech_chunks: int = 5  # 最少语音帧数
     ) -> Optional[bytes]:
         """动态时长录音,基于静音检测自动停止"""
-        logger.info(f"🎙️  Starting dynamic recording (min: {min_duration}s, max: {max_duration}s)...")
+        logger.info(f"Starting dynamic recording (min: {min_duration}s, max: {max_duration}s)...")
 
         self.start_recording()
 
@@ -172,28 +172,28 @@ class AudioRecorder:
 
                 # 检查最大时长
                 if elapsed >= max_duration:
-                    logger.info(f"⏱️  Reached maximum duration of {max_duration}s")
+                    logger.info(f"Reached maximum duration of {max_duration}s")
                     break
 
                 # 录制一帧
                 try:
                     chunk = self.record_chunk()
                     if not chunk or len(chunk) == 0:
-                        logger.warning("⚠️  Empty audio chunk received, skipping...")
+                        logger.warning("Empty audio chunk received, skipping...")
                         continue
                 except Exception as e:
-                    logger.error(f"❌ Error recording chunk: {e}")
+                    logger.error(f"Error recording chunk: {e}")
                     break
 
                 # 计算音量
                 rms = self._calculate_rms(chunk)
 
-                # 检测是否有明确的语音(更高的阈值)
+                # 检测是否有明确的语音
                 if rms > speech_threshold:
                     speech_chunks_count += 1
                     last_sound_time = current_time
                     if int(elapsed) != int(elapsed - 1 / chunks_per_second):
-                        logger.debug(f"🎤 Recording speech... {elapsed:.1f}s (RMS: {rms:.1f})")
+                        logger.debug(f"Recording speech... {elapsed:.1f}s (RMS: {rms:.1f})")
                 elif rms > silence_threshold:
                     # 有声音但不够强,也更新时间
                     last_sound_time = current_time
@@ -203,33 +203,33 @@ class AudioRecorder:
 
                 # 如果已超过最小时长,且静音超过指定时长,则停止
                 if elapsed >= min_duration and silence_time >= silence_duration:
-                    logger.info(f"🔇 Detected {silence_time:.1f}s of silence")
+                    logger.info(f"detected {silence_time:.1f}s of silence")
                     break
 
             # 停止录音
             audio_data = self.stop_recording()
 
             if not audio_data or len(audio_data) == 0:
-                logger.warning("⚠️  No audio data recorded")
+                logger.warning("No audio data recorded")
                 return None
 
             # 检查是否录制到足够的语音
             if speech_chunks_count < min_speech_chunks:
                 logger.warning(
-                    f"⚠️  Insufficient speech detected ({speech_chunks_count} chunks), likely silence or noise")
+                    f"Insufficient speech detected ({speech_chunks_count} chunks), likely silence or noise")
                 return None
 
             actual_duration = time.time() - start_time
 
             if actual_duration < min_duration:
-                logger.warning(f"⚠️  Recording too short: {actual_duration:.1f}s")
+                logger.warning(f"Recording too short: {actual_duration:.1f}s")
                 return None
 
-            logger.info(f"✅ Recorded {actual_duration:.1f}s with {speech_chunks_count} speech chunks")
+            logger.info(f"Recorded {actual_duration:.1f}s with {speech_chunks_count} speech chunks")
             return audio_data
 
         except Exception as e:
-            logger.error(f"❌ Error during recording: {e}")
+            logger.error(f"Error during recording: {e}")
             import traceback
             traceback.print_exc()
             self.stop_recording()
@@ -237,7 +237,7 @@ class AudioRecorder:
 
     def record_duration(self, duration: float) -> bytes:
         """录制指定时长的音频"""
-        logger.info(f"🎙️  Starting to record for {duration} seconds...")
+        logger.info(f"Starting to record for {duration} seconds...")
 
         self.start_recording()
 
@@ -251,12 +251,12 @@ class AudioRecorder:
                     elapsed = (i + 1) // (self.sample_rate // self.chunk_size)
 
             audio_data = self.stop_recording()
-            logger.info(f"✅ Finished recording {duration} seconds of audio.")
+            logger.info(f"Finished recording {duration} seconds of audio.")
 
             return audio_data
 
         except Exception as e:
-            logger.error(f"❌ Error during recording: {e}")
+            logger.error(f"Error during recording: {e}")
             self.stop_recording()
             raise
 
@@ -267,10 +267,10 @@ class AudioRecorder:
             with open(filename, 'wb') as f:
                 f.write(audio_data)
 
-            logger.info(f"💾 Saved audio to file: {filename}")
+            logger.info(f"Saved audio to file: {filename}")
 
         except Exception as e:
-            logger.error(f"❌ Failed to save audio to file: {e}")
+            logger.error(f"Failed to save audio to file: {e}")
             raise
 
     def cleanup(self):
@@ -288,7 +288,7 @@ class AudioRecorder:
         if self.pa:
             try:
                 self.pa.terminate()
-                logger.info("🧹 AudioRecorder resources cleaned up.")
+                logger.info("AudioRecorder resources cleaned up.")
             except:
                 pass
 

@@ -5,6 +5,7 @@
 @Author : guojarrett@gmail.com
 @File   : base_agent.py
 """
+
 import asyncio
 import platform
 from abc import ABC
@@ -241,14 +242,7 @@ class BaseAgent(Runnable, ABC):
             tool_manager: ToolRegistry,
             check_dependencies: bool = True
     ) -> Dict[str, 'BaseAgent']:
-        """
-        创建所有注册的 Agent
-
-        自动处理:
-        - 平台兼容性
-        - 工具依赖检查
-        - 优先级排序
-        """
+        """创建所有注册的 Agent - 自动检查依赖并实例化"""
         agents = {}
 
         # 按优先级排序

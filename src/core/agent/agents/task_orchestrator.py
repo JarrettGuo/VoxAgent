@@ -11,9 +11,7 @@ from src.utils.logger import logger
 
 
 class TaskOrchestrator:
-    """
-    任务协调器 - 使用 LangGraph 管理执行流程
-    """
+    """任务协调器 - 使用 LangGraph 管理执行流程"""
 
     name: str = "task_orchestrator"
     agents: Dict[str, Any] = {}
@@ -27,13 +25,15 @@ class TaskOrchestrator:
         """构建简化的 LangGraph 工作流"""
         workflow = StateGraph(ExecutionState)
 
-        # 只需要 3 个节点
+        # 定义节点
         workflow.add_node("initialize", self._initialize_execution)
         workflow.add_node("execute_step", self._execute_step)
         workflow.add_node("finalize", self._finalize_execution)
 
+        # 设置入口点
         workflow.set_entry_point("initialize")
 
+        # 节点连接
         workflow.add_edge("initialize", "execute_step")
 
         # execute_step 之后直接判断是否继续
@@ -189,14 +189,12 @@ class TaskOrchestrator:
             if (s.status if hasattr(s, 'status') else s.get('status')) == ExecutionStatus.SUCCESS
         )
 
-        logger.info(f"🎉 Execution finalized: {successful_steps}/{len(steps)} successful")
+        logger.info(f"Execution finalized: {successful_steps}/{len(steps)} successful")
 
         return {"completed": True}
 
     def execute(self, plan: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        执行计划（外部接口）
-        """
+        """执行计划（外部接口）"""
         logger.info("=" * 70)
         logger.info("Starting TaskOrchestrator execution")
         logger.info("=" * 70)

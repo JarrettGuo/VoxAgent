@@ -41,7 +41,7 @@ class WhisperASR:
         else:
             self.device = device
 
-        logger.info(f"🔄 Initializing Whisper ASR...")
+        logger.info(f"Initializing Whisper ASR...")
 
         # 初始化 pipeline
         try:
@@ -51,11 +51,11 @@ class WhisperASR:
                 chunk_length_s=chunk_length_s,
                 device=self.device,
             )
-            logger.info("✅ Whisper ASR initialized successfully")
+            logger.info("Whisper ASR initialized successfully")
 
         except Exception as e:
-            logger.error(f"❌ Failed to initialize Whisper: {e}")
-            logger.info("💡 Tip: First time may need to download model (~1-6GB)")
+            logger.error(f"Failed to initialize Whisper: {e}")
+            logger.info("Tip: First time may need to download model (~1-6GB)")
             raise
 
     def convert_to_wav(self, input_path: str, target_sr: int = 16000) -> str:
@@ -80,13 +80,13 @@ class WhisperASR:
             return output_path
 
         except subprocess.CalledProcessError as e:
-            logger.error(f"❌ Audio conversion failed: {e}")
+            logger.error(f"Audio conversion failed: {e}")
             if os.path.exists(output_path):
                 os.remove(output_path)
             raise RuntimeError("Audio conversion failed")
 
         except FileNotFoundError:
-            logger.error("❌ ffmpeg not found. Please install ffmpeg first")
+            logger.error("ffmpeg not found. Please install ffmpeg first")
             if os.path.exists(output_path):
                 os.remove(output_path)
             raise RuntimeError("ffmpeg not installed")
@@ -101,7 +101,7 @@ class WhisperASR:
         if not os.path.exists(audio_file):
             raise FileNotFoundError(f"Audio file not found: {audio_file}")
 
-        logger.info(f"🔄 Transcribing audio file: {audio_file}")
+        logger.info(f"Transcribing audio file: {audio_file}")
 
         # 检查文件格式
         file_ext = os.path.splitext(audio_file)[1].lower()
@@ -130,7 +130,7 @@ class WhisperASR:
             )
 
             text = result["text"].strip()
-            logger.info(f"✅ Transcription: {text}")
+            logger.info(f"Transcription: {text}")
 
             return {
                 "text": text,
@@ -139,7 +139,7 @@ class WhisperASR:
             }
 
         except Exception as e:
-            logger.error(f"❌ Transcription failed: {e}")
+            logger.error(f"Transcription failed: {e}")
             raise
 
         finally:
@@ -155,9 +155,9 @@ class WhisperASR:
             language: Optional[str] = None
     ) -> Dict[str, Any]:
         """从字节流识别语音"""
-        logger.info(f"🔄 Transcribing audio from bytes")
-        logger.info(f"   Size: {len(audio_data)} bytes")
-        logger.info(f"   Format: {audio_format}")
+        logger.info(f"Transcribing audio from bytes")
+        logger.info(f"Size: {len(audio_data)} bytes")
+        logger.info(f"Format: {audio_format}")
 
         # 保存到临时文件
         with tempfile.NamedTemporaryFile(
@@ -179,12 +179,3 @@ class WhisperASR:
             # 清理临时文件
             if os.path.exists(temp_path):
                 os.remove(temp_path)
-
-    def get_model_info(self) -> Dict[str, Any]:
-        """获取模型信息"""
-        return {
-            "model_name": self.model_name,
-            "device": self.device,
-            "batch_size": self.batch_size,
-            "chunk_length": self.chunk_length_s
-        }

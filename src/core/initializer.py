@@ -26,9 +26,7 @@ class AssistantInitializer:
 
     def initialize_all(self) -> bool:
         """初始化所有模块"""
-        logger.info("=" * 60)
-        logger.info("🤖 VoxAgent Voice Assistant is starting...")
-        logger.info("=" * 60)
+        logger.info("VoxAgent Voice Assistant is starting...")
 
         self._init_langsmith()
 
@@ -48,12 +46,7 @@ class AssistantInitializer:
         if not self._init_asr():
             return False
 
-        # TODO: 初始化其他模块
-        # - LLM 客户端
-        # - TTS 客户端
-        # - 工具注册表
-
-        logger.info("✅ All modules initialized successfully")
+        logger.info("All modules initialized successfully")
         return True
 
     def _init_langsmith(self) -> None:
@@ -68,7 +61,7 @@ class AssistantInitializer:
         # 检查唤醒词配置
         access_key = self.config.get("wake_word.access_key")
         if not access_key:
-            logger.error("❌ Please configure Porcupine Access Key first")
+            logger.error("Please configure Porcupine Access Key first")
             return False
 
         # 检查 ASR 配置
@@ -81,9 +74,8 @@ class AssistantInitializer:
             # 检查七牛云配置
             api_key = self.config.get("qiniu.api_key")
             if not api_key:
-                logger.error("❌ Please configure Qiniu API Key first")
+                logger.error("Please configure Qiniu API Key first")
                 return False
-        # todo 后续的其他配置检查也要放这里
 
         return True
 
@@ -101,11 +93,11 @@ class AssistantInitializer:
                 on_wake=self.assistant._on_wake_detected
             )
 
-            logger.info("✅ Wake word detector initialized successfully")
+            logger.info("Wake word detector initialized successfully")
             return True
 
         except Exception as e:
-            logger.error(f"❌ Wake word detector initialization failed: {e}")
+            logger.error(f"Wake word detector initialization failed: {e}")
             return False
 
     def _init_recorder(self) -> bool:
@@ -121,11 +113,11 @@ class AssistantInitializer:
                 chunk_size=chunk_size
             )
 
-            logger.info("✅ Audio recorder initialized successfully")
+            logger.info("Audio recorder initialized successfully")
             return True
 
         except Exception as e:
-            logger.error(f"❌ Audio recorder initialization failed: {e}")
+            logger.error(f"Audio recorder initialization failed: {e}")
             return False
 
     def _init_asr(self) -> bool:
@@ -143,8 +135,8 @@ class AssistantInitializer:
                 batch_size = self.config.get("asr.whisper.batch_size", 8)
                 chunk_length = self.config.get("asr.whisper.chunk_length_s", 30)
 
-                logger.info(f"   Using local Whisper ASR")
-                logger.info(f"   Model: {model}")
+                logger.info(f"Using local Whisper ASR")
+                logger.info(f"Model: {model}")
 
                 self.assistant.asr_client = WhisperASR(
                     model_name=model,
@@ -155,19 +147,19 @@ class AssistantInitializer:
                 self.assistant.asr_provider = "whisper"
                 self.assistant.asr_language = self.config.get("asr.whisper.language", "zh")
             else:
-                logger.error(f"❌ Unknown ASR provider: {provider}")
+                logger.error(f"Unknown ASR provider: {provider}")
                 return False
 
-            logger.info(f"✅ ASR client initialized (provider: {provider})")
+            logger.info(f"ASR client initialized (provider: {provider})")
             return True
 
         except Exception as e:
-            logger.error(f"❌ ASR client initialization failed: {e}")
+            logger.error(f"ASR client initialization failed: {e}")
             import traceback
             traceback.print_exc()
 
             if "No module named" in str(e):
-                logger.info("\n💡 Tip: Please install dependencies:")
-                logger.info("   pip install torch transformers accelerate")
+                logger.info("\nTip: Please install dependencies:")
+                logger.info("pip install torch transformers accelerate")
 
             return False

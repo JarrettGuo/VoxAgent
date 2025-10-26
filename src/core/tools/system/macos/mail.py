@@ -35,7 +35,7 @@ class MailSearchTool(MacOSBaseTool):
             if not self._ensure_app_running("Mail"):
                 return "无法启动 Mail 应用"
 
-            # 修复后的 AppleScript
+            #  AppleScript
             script = f'''
             tell application "Mail"
                 set resultList to {{}}

@@ -28,7 +28,7 @@ class QiniuClient:
         if not api_key:
             raise ValueError("API Key 不能为空")
 
-        logger.info("✅ Qiniu Client initialized successfully")
+        logger.info("Qiniu Client initialized successfully")
 
     def _get_headers(self) -> Dict[str, str]:
         """获取请求头"""
@@ -65,13 +65,13 @@ class QiniuClient:
             return response.json()
 
         except requests.exceptions.Timeout:
-            logger.error(f"❌ Timeout occurred after {timeout} seconds")
+            logger.error(f"Timeout occurred after {timeout} seconds")
             raise
         except requests.exceptions.RequestException as e:
-            logger.error(f"❌ HTTP Request failed: {e}")
+            logger.error(f"HTTP Request failed: {e}")
             if hasattr(e.response, 'text'):
                 logger.error(f"   Response: {e.response.text}")
             raise
         except json.JSONDecodeError as e:
-            logger.error(f"❌ Failed to parse JSON response: {e}")
+            logger.error(f"Failed to parse JSON response: {e}")
             raise

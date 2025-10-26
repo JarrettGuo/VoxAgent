@@ -8,10 +8,10 @@
 
 import json
 import uuid
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage, BaseMessage
 
 from src.core.agent.entities.agent_prompts import PLANNER_AGENT_SYSTEM_PROMPT_TEMPLATE
 from src.core.agent.entities.plan_entity import PlannerOutput, PlanStep
@@ -48,7 +48,7 @@ class PlannerAgent:
 
         return "\n".join(lines)
 
-    async def plan(self, user_query: str) -> ExecutionPlan:
+    async def plan(self, user_query: str, conversation_history: Optional[List[BaseMessage]] = None) -> ExecutionPlan:
         """生成执行计划（异步）"""
         try:
             # 1. 构建提示词
@@ -61,6 +61,16 @@ class PlannerAgent:
                 SystemMessage(content=system_prompt),
                 HumanMessage(content=user_query)
             ]
+
+            if conversation_history:
+                messages.extend(conversation_history)
+                logger.info(
+                    f"Planning with {len(conversation_history)} "
+                    f"history messages"
+                )
+            else:
+                # 如果没有历史，使用单轮查询
+                messages.append(HumanMessage(content=user_query))
 
             response = await self.llm.ainvoke(messages)
             response_content = response.content.strip()
@@ -84,10 +94,10 @@ class PlannerAgent:
             # 返回空计划
             return self._create_empty_plan(user_query, error=str(e))
 
-    def plan_sync(self, user_query: str) -> ExecutionPlan:
+    def plan_sync(self, user_query: str, conversation_history: Optional[List[BaseMessage]] = None) -> ExecutionPlan:
         """生成执行计划（同步）"""
         import asyncio
-        return asyncio.run(self.plan(user_query))
+        return asyncio.run(self.plan(user_query, conversation_history))
 
     def _parse_response(self, response: str, original_task: str) -> PlannerOutput:
         """解析 LLM 响应为 PlannerOutput"""

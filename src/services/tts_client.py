@@ -18,15 +18,7 @@ from src.utils.logger import logger
 
 
 class tts_client:
-    """
-    Edge TTS 客户端（基于微软 Edge 浏览器的 TTS）
-
-    优点：
-    - 完全免费，无需 API Key
-    - 音质优秀
-    - 支持多种中文音色
-    - 速度快
-    """
+    """Edge TTS 客户端（基于微软 Edge 浏览器的 TTS）"""
 
     # 中文音色列表
     VOICES = {
@@ -56,15 +48,7 @@ class tts_client:
             volume: str = "+0%",  # 音量：-50% 到 +50%
             pitch: str = "+0Hz"  # 音高：-50Hz 到 +50Hz
     ):
-        """
-        初始化 Edge TTS 客户端
-
-        Args:
-            voice: 音色名称（简化名称，如 'yunyang'）
-            rate: 语速调整
-            volume: 音量调整
-            pitch: 音高调整
-        """
+        """初始化 Edge TTS 客户端"""
         self.voice_id = self.VOICES.get(voice, self.VOICES["yunyang"])
         self.rate = rate
         self.volume = volume
@@ -77,21 +61,12 @@ class tts_client:
             text: str,
             save_to: Optional[str] = None
     ) -> bytes:
-        """
-        异步合成语音
-
-        Args:
-            text: 要合成的文本
-            save_to: 保存路径（可选）
-
-        Returns:
-            音频数据 (MP3)
-        """
+        """异步合成语音 - 返回音频数据 (MP3)"""
         if not text or not text.strip():
             logger.warning("Empty text provided for TTS")
             return b""
 
-        logger.info(f"🔊 Synthesizing speech: {text[:50]}...")
+        logger.info(f"Synthesizing speech: {text[:50]}...")
 
         try:
             # 创建 TTS 通信对象
@@ -113,13 +88,13 @@ class tts_client:
             if save_to:
                 with open(save_to, 'wb') as f:
                     f.write(audio_data)
-                logger.info(f"💾 Audio saved to: {save_to}")
+                logger.info(f"Audio saved to: {save_to}")
 
-            logger.info(f"✅ Speech synthesis completed ({len(audio_data)} bytes)")
+            logger.info(f"Speech synthesis completed ({len(audio_data)} bytes)")
             return audio_data
 
         except Exception as e:
-            logger.error(f"❌ TTS synthesis failed: {e}")
+            logger.error(f"TTS synthesis failed: {e}")
             raise
 
     def synthesize(
@@ -127,25 +102,11 @@ class tts_client:
             text: str,
             save_to: Optional[str] = None
     ) -> bytes:
-        """
-        同步合成语音
-
-        Args:
-            text: 要合成的文本
-            save_to: 保存路径（可选）
-
-        Returns:
-            音频数据 (MP3)
-        """
+        """同步合成语音 - 返回音频数据 (MP3)"""
         return asyncio.run(self.synthesize_async(text, save_to))
 
     def speak(self, text: str) -> None:
-        """
-        合成并播放语音
-
-        Args:
-            text: 要播放的文本
-        """
+        """合成并播放语音"""
         try:
             # 合成音频
             audio_data = self.synthesize(text)
@@ -154,16 +115,16 @@ class tts_client:
                 logger.warning("No audio data to play")
                 return
 
-            logger.info("🔊 Playing audio...")
+            logger.info("Playing audio...")
 
             # 播放音频
             audio = AudioSegment.from_mp3(io.BytesIO(audio_data))
             play(audio)
 
-            logger.info("✅ Audio playback completed")
+            logger.info("Audio playback completed")
 
         except Exception as e:
-            logger.error(f"❌ Failed to play audio: {e}")
+            logger.error(f"Failed to play audio: {e}")
             raise
 
     @classmethod

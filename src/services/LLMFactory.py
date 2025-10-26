@@ -16,28 +16,13 @@ from src.utils.logger import logger
 
 
 class LLMFactory:
-    """
-    LLM 工厂类 - 根据用途创建不同的模型
-
-    分级策略：
-    - Planner:  qwen3-max (最强推理)
-    - Worker:   qwen3-max-preview (快速响应)
-    - Summary:  qwen3-max-preview (快速总结)
-    """
+    """LLM 工厂类 - 根据用途创建不同的模型"""
 
     _instances: Dict[str, ChatOpenAI] = {}
 
     @classmethod
     def get_llm(cls, llm_type: str = "worker") -> ChatOpenAI:
-        """
-        获取 LLM 实例（单例模式）
-
-        Args:
-            llm_type: planner | worker | summary
-
-        Returns:
-            ChatOpenAI 实例
-        """
+        """获取 LLM 实例（单例模式）"""
         # 检查缓存
         if llm_type in cls._instances:
             logger.debug(f"Using cached {llm_type} LLM")
@@ -74,7 +59,7 @@ class LLMFactory:
         cls._instances[llm_type] = llm
 
         logger.info(
-            f"✅ Created {llm_type} LLM: "
+            f"Created {llm_type} LLM: "
             f"model={model_config.get('model')}, "
             f"temp={model_config.get('temperature')}, "
             f"max_tokens={model_config.get('max_tokens')}"
@@ -83,8 +68,8 @@ class LLMFactory:
         return llm
 
     @classmethod
-    def _create_ollama_llm(cls) -> ChatOllama:
-        """创建 Ollama 本地模型（用于 Worker）"""
+    def _create_ollama_llm(cls) -> ChatOpenAI:
+        """创建 Ollama 本地模型"""
         try:
             ollama_config = config.get("ollama", {})
 
@@ -101,12 +86,11 @@ class LLMFactory:
                 base_url=base_url,
                 temperature=temperature,
                 timeout=timeout,
-                # 启用工具调用支持
                 num_ctx=4096,  # 上下文长度
             )
 
             logger.info(
-                f"✅ Created Worker Ollama LLM: "
+                f"Created Worker Ollama LLM: "
                 f"model={model_name}, "
                 f"temp={temperature}, "
                 f"base_url={base_url}"
@@ -116,13 +100,13 @@ class LLMFactory:
 
         except Exception as e:
             logger.error(f"Failed to create Ollama LLM: {e}")
-            logger.warning("⚠️  Falling back to Qiniu cloud for Worker")
+            logger.warning("Falling back to Qiniu cloud for Worker")
             # 降级到七牛云
             return cls._create_qiniu_llm("worker")
 
     @classmethod
     def _create_qiniu_llm(cls, llm_type: str) -> ChatOpenAI:
-        """创建七牛云 LLM（用于 Planner 和 Summary）"""
+        """创建七牛云 LLM"""
         try:
             # 获取基础配置
             qiniu_config = config.get("qiniu")
@@ -152,7 +136,7 @@ class LLMFactory:
             )
 
             logger.info(
-                f"✅ Created {llm_type} Qiniu LLM: "
+                f"Created {llm_type} Qiniu LLM: "
                 f"model={model_config.get('model')}, "
                 f"temp={model_config.get('temperature')}, "
                 f"max_tokens={model_config.get('max_tokens')}"
@@ -166,29 +150,17 @@ class LLMFactory:
 
     @classmethod
     def get_planner_llm(cls) -> ChatOpenAI:
-        """
-        获取 Planner 专用 LLM
-
-        使用 qwen3-max：最强推理能力，用于任务规划
-        """
+        """获取 Planner 专用 LLM"""
         return cls.get_llm("planner")
 
     @classmethod
     def get_worker_llm(cls) -> ChatOpenAI:
-        """
-        获取 Worker 专用 LLM
-
-        使用 qwen3-max-preview：快速响应，用于工具调用
-        """
+        """获取 Worker 专用 LLM"""
         return cls.get_llm("worker")
 
     @classmethod
     def get_summary_llm(cls) -> ChatOpenAI:
-        """
-        获取 Summary 专用 LLM
-
-        使用 qwen3-max-preview：快速响应，用于结果总结
-        """
+        """获取 Summary 专用 LLM"""
         return cls.get_llm("summary")
 
     @classmethod
@@ -206,7 +178,7 @@ class LLMFactory:
     def clear_cache(cls):
         """清除缓存（用于测试或重新配置）"""
         cls._instances.clear()
-        logger.info("🗑️  LLM cache cleared")
+        logger.info("LLM cache cleared")
 
     @classmethod
     def get_all_models_info(cls) -> Dict[str, Dict]:

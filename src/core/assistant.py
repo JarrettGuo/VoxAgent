@@ -24,8 +24,8 @@ class VoiceAssistant:
         self.detector: Optional[WakeWordDetector] = None
         self.recorder: Optional[AudioRecorder] = None
         self.asr_client = None
-        self.asr_provider = None  # 记录使用的提供商
-        self.asr_language = None  # 记录语言设置
+        self.asr_provider = None
+        self.asr_language = None
         self.is_processing = False  # 是否正在处理指令
         self._initialized = False
 
@@ -48,7 +48,7 @@ class VoiceAssistant:
     def _on_wake_detected(self, keyword_index: int):
         """唤醒词检测回调，当检测到唤醒词时调用"""
         if self.is_processing:
-            logger.warning("⏳ Currently processing, please wait...")
+            logger.warning("Currently processing, please wait...")
             return
 
         # 获取唤醒词
@@ -61,7 +61,7 @@ class VoiceAssistant:
         """运行助手"""
         # 初始化
         if not self.initialize():
-            logger.error("❌ Assistant initialization failed, exiting...")
+            logger.error("Assistant initialization failed, exiting...")
             return
 
         # 显示就绪信息
@@ -72,7 +72,7 @@ class VoiceAssistant:
             self.detector.start()
 
         except KeyboardInterrupt:
-            logger.info("\n👋 Exiting...")
+            logger.info("\nExiting...")
 
         finally:
             self.cleanup()
@@ -80,18 +80,13 @@ class VoiceAssistant:
     def _show_ready_message(self):
         """显示就绪信息"""
         keywords = self.config.get('wake_word.keywords', [])
-
-        logger.info("")
-        logger.info("=" * 60)
-        logger.info("✨ Voice Assistant is ready!")
-        logger.info(f"   Wake words: {', '.join(keywords)}")
-        logger.info("    press Ctrl+C to exit")
-        logger.info("=" * 60)
-        logger.info("")
+        logger.info("Voice Assistant is ready!")
+        logger.info(f"Wake words: {', '.join(keywords)}")
+        logger.info("press Ctrl+C to exit")
 
     def cleanup(self):
         """清理资源"""
-        logger.info("🧹 Cleaning up resources...")
+        logger.info("Cleaning up resources...")
 
         if self.detector:
             self.detector.cleanup()
@@ -99,8 +94,4 @@ class VoiceAssistant:
         if self.recorder:
             self.recorder.cleanup()
 
-        # TODO: 清理其他资源
-        # - 关闭 API 连接
-        # - 保存状态等
-
-        logger.info("👋 Goodbye!")
+        logger.info("Goodbye!")
