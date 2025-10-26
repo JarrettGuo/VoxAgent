@@ -3,7 +3,7 @@ from typing import List
 from langchain_core.tools import BaseTool
 
 from src.core.agent.agents.base_agent import BaseAgent
-from src.core.agent.entities.agent_prompts import MAC_MUSIC_AGENT_PROMPT
+from src.core.agent.entities.agent_prompts import create_platform_prompt, MUSIC_AGENT_PROMPT
 
 
 class MacMusicAgent(
@@ -33,6 +33,6 @@ class MacMusicAgent(
 
         tools_section = "\n".join(tool_descriptions)
 
-        prompt_template = MAC_MUSIC_AGENT_PROMPT
+        prompt_template = create_platform_prompt(MUSIC_AGENT_PROMPT, 'music', 'mac')
 
         return prompt_template.format(tools_section=tools_section)
