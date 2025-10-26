@@ -5,7 +5,7 @@
 @Author : guojarrett@gmail.com
 @File   : schemas.py
 """
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -39,3 +39,11 @@ class GaodeWeatherSchema(BaseModel):
 class Dalle3Schema(BaseModel):
     """DALL·E 3 图像生成参数"""
     query: str = Field(description="用于生成图像的文本提示（英文效果更好）")
+
+class ImageDownloadSchema(BaseModel):
+    """图片下载工具的输入"""
+    url: str = Field(description="要下载的图片URL")
+    filename: Optional[str] = Field(
+        default=None,
+        description="保存的文件名（可选），如果不提供会自动生成。应该包含扩展名如 .png 或 .jpg"
+    )

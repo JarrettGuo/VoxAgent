@@ -18,15 +18,14 @@ from src.utils.logger import logger
 def dalle3(api_key: SecretStr = None, **kwargs) -> BaseTool:
     """DALL·E 3 图像生成工具"""
     try:
+        if api_key is None:
+           raise Exception("api_key not passed.")
         # 创建 API 包装器
         api_wrapper = DallEAPIWrapper(
             model="dall-e-3",
+            api_key=api_key,
             **kwargs
         )
-
-        # 如果提供了 api_key，设置到包装器中
-        if api_key:
-            api_wrapper.openai_api_key = api_key
 
         tool = OpenAIDALLEImageGenerationTool(
             name="dalle3",
