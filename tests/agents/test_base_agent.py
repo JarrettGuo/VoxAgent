@@ -120,7 +120,6 @@ class TestBaseAgentCore:
             # 执行任务
             result = await agent.ainvoke({
                 "user_input": f"创建文件 {test_file}，内容为：Test content",
-                "parameters": {}
             })
 
             logger.info(f"Execution result: {result}")

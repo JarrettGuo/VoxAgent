@@ -23,13 +23,9 @@ class TaskStatus(str, Enum):
 class Task(BaseModel):
     """任务定义"""
     task_id: str
-    description: str
-    assigned_agent: str
-    tool: Optional[str] = None
-    parameters: Dict[str, Any] = Field(default_factory=dict)
-    dependencies: List[str] = Field(default_factory=list)
+    description: str  # 任务描述
+    assigned_agent: str  # 分配的 Agent 名称
     metadata: Dict[str, Any] = Field(default_factory=dict)
-
     status: TaskStatus = TaskStatus.PENDING
     attempts: int = 0
     created_at: datetime = Field(default_factory=datetime.now)

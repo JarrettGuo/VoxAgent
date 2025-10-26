@@ -29,7 +29,7 @@ class TaskOrchestrator:
 
         # 只需要 3 个节点
         workflow.add_node("initialize", self._initialize_execution)
-        workflow.add_node("execute_step", self._execute_step)  # ← 合并原来的 agent_step + execute_tool
+        workflow.add_node("execute_step", self._execute_step)
         workflow.add_node("finalize", self._finalize_execution)
 
         workflow.set_entry_point("initialize")
@@ -67,7 +67,6 @@ class TaskOrchestrator:
                 step_id=step.get("task_id"),
                 description=step.get("description", ""),
                 agent_type=step.get("assigned_agent", "unknown"),
-                parameters=step.get("parameters", {}),
                 status=ExecutionStatus.PENDING,
                 iteration_count=0
             ))
@@ -112,10 +111,7 @@ class TaskOrchestrator:
 
         try:
             # 调用 agent
-            result = asyncio.run(agent.ainvoke({
-                "user_input": current_step.description,
-                "parameters": current_step.parameters
-            }))
+            result = asyncio.run(agent.ainvoke({"user_input": current_step.description}))
 
             # 检查执行结果
             if not result.get("success"):

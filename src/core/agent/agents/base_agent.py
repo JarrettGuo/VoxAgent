@@ -181,7 +181,6 @@ class BaseAgent(Runnable, ABC):
         try:
             # 1. 解析输入
             user_input = input.get("user_input")
-            parameters = input.get("parameters", {})
 
             if not user_input:
                 return {
@@ -192,14 +191,12 @@ class BaseAgent(Runnable, ABC):
                 }
 
             # 构建输入消息
-            task_message = self._build_task_message(user_input, parameters)
+            task_message = f"任务描述: {user_input}\n\n请根据描述完成任务。"
 
             result = await self.agent_executor.ainvoke({
                 "input": task_message,
                 "chat_history": self.conversation_history
             })
-
-            tool_call_id = input.get("tool_call_id")
 
             # 更新对话历史
             self.conversation_history.append(HumanMessage(content=task_message))
@@ -236,17 +233,6 @@ class BaseAgent(Runnable, ABC):
     ) -> Dict[str, Any]:
         """同步执行（内部调用 ainvoke）"""
         return asyncio.run(self.ainvoke(input, config, **kwargs))
-
-    def _build_task_message(self, user_input: str, parameters: Dict[str, Any]) -> str:
-        """构建任务消息"""
-        message = f"任务: {user_input}\n"
-
-        if parameters:
-            message += "\n参数:\n"
-            for key, value in parameters.items():
-                message += f"- {key}: {value}\n"
-
-        return message
 
     @classmethod
     def create_all_agents(

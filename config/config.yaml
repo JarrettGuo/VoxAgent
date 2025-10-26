@@ -35,7 +35,7 @@ langsmith:
 asr:
   provider: "whisper"
   whisper:
-    model: "openai/whisper-small"
+    model: "openai/whisper-base"
     device: null
     batch_size: 8
     chunk_length_s: 30
@@ -52,13 +52,22 @@ openai:
 qiniu:
   api_key: "sk-ee25dd68d59b66e45d4ed087ceb6c8e30ab0f08f4294908be20a41da14aded3b"
   base_url: "https://openai.qiniu.com/v1"
-  asr:
-    model: "asr"
-    format: "wav"
-  llm:
-    model: "qwen3-max"
-    temperature: 0.7
-    max_tokens: 2000
+  models:
+    # 大模型 - 用于复杂推理（Planner）
+    planner:
+      model: "qwen3-max"              # 最强推理能力
+      temperature: 0.0                 # 确定性输出
+      max_tokens: 500                  # 计划不需要太长
+    # 快速模型 - 用于工具调用（Workers）
+    worker:
+      model: "qwen3-next-80b-a3b-instruct"      # 更快的响应
+      temperature: 0.0                 # 确定性输出
+      max_tokens: 300                  # 工具调用结果简洁
+    # 快速模型 - 用于简单总结（Summary）
+    summary:
+      model: "qwen3-next-80b-a3b-instruct"      # 更快的响应
+      temperature: 0.3                 # 稍高让总结更自然
+      max_tokens: 200                  # 总结要简短
 
   # TTS 配置
   tts:
@@ -77,9 +86,9 @@ recording:
   dynamic:
     min_duration: 2.0
     max_duration: 60.0
-    silence_threshold: 500.0
-    silence_duration: 3.0
-    speech_threshold: 800.0
+    silence_threshold: 800.0
+    silence_duration: 2.0
+    speech_threshold: 1000.0
     min_speech_chunks: 5
   sample_rate: 16000
   channels: 1
@@ -94,3 +103,11 @@ agent:
 # Google Serper 配置
 google_serper:
   api_key: "b811356b2cc9edb2feff14c7e325c0eeef646844"
+
+# ollama 配置
+ollama:
+  enabled: true
+  base_url: "http://localhost:11434"
+  model: "qwen2.5:7b"
+  temperature: 0.0
+  timeout: 60

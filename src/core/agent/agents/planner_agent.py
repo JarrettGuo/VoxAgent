@@ -172,8 +172,6 @@ class PlannerAgent:
                 task_id=task_id,
                 description=step.description,
                 assigned_agent=step.assigned_agent,
-                parameters=step.parameters,
-                dependencies=[],
                 metadata={
                     "step_number": step.step_number,
                     "expected_result": step.expected_result

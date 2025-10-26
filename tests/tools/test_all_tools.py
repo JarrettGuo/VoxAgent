@@ -10,7 +10,6 @@ from src.core.tools import tool_registry
 from src.utils.logger import logger
 
 
-# tests/tools/test_all_tools.py
 def test_all_tools():
     """测试所有已注册的工具"""
     # 显示所有已注册的工具

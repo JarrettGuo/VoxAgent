@@ -62,7 +62,6 @@ class StepState(BaseModel):
     status: ExecutionStatus = ExecutionStatus.PENDING
     result: Optional[Any] = None
     error: str = ""
-    parameters: Dict[str, Any] = Field(default_factory=dict)
 
     # 执行追踪
     iteration_count: int = 0

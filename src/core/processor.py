@@ -20,6 +20,7 @@ from src.core.agent.agents.summary_agent import SummaryAgent
 from src.core.agent.agents.task_orchestrator import TaskOrchestrator
 from src.core.models import ExecutionPlan
 from src.core.tools import tool_registry
+from src.services.LLMFactory import LLMFactory
 from src.services.tts_client import tts_client
 from src.utils.logger import logger
 
@@ -42,6 +43,21 @@ class CommandProcessor:
         self.tts_client = None  # TTS 客户端实例
 
         self._initialized = False
+
+        self.voice_prompts = {
+            "wake": ["请讲"],
+            "processing": [
+                "好的，请稍等",
+                "收到，正在处理",
+                "明白了，马上为您处理",
+                "好的，稍等片刻"
+            ],
+            "error": [
+                "抱歉，出现了一些问题",
+                "很抱歉，处理失败了",
+                "抱歉，遇到了错误"
+            ]
+        }
 
     def _initialize_system(self) -> bool:
         """
@@ -67,8 +83,9 @@ class CommandProcessor:
                 return False
 
             # 2. 创建 Worker Agents
+            worker_llm = LLMFactory.get_worker_llm()
             self.agents = BaseAgent.create_all_agents(
-                llm=self.llm,
+                llm=worker_llm,
                 tool_manager=tool_registry,
                 check_dependencies=False
             )
@@ -80,8 +97,9 @@ class CommandProcessor:
             logger.info(f"Created {len(self.agents)} agents: {list(self.agents.keys())}")
 
             # 3. 创建 PlannerAgent
+            planner_llm = LLMFactory.get_planner_llm()
             self.planner = PlannerAgent(
-                llm=self.llm,
+                llm=planner_llm,
                 available_agents=self.agents
             )
             logger.info("PlannerAgent initialized")
@@ -91,7 +109,8 @@ class CommandProcessor:
             logger.info("TaskOrchestrator initialized")
 
             # 创建 Summarizer
-            self.summarizer = SummaryAgent(llm=self.llm)
+            summary_llm = LLMFactory.get_summary_llm()
+            self.summarizer = SummaryAgent(llm=summary_llm)
             logger.info("SummarizerAgent initialized")
 
             # 创建 TTS 客户端
@@ -130,6 +149,9 @@ class CommandProcessor:
             # 等待一小段时间,确保麦克风释放
             time.sleep(0.2)
 
+            # 播放唤醒确认音
+            self._play_wake_confirmation()
+
             # 1. 录音
             audio_data = self._record_audio()
             if audio_data is None:
@@ -139,9 +161,12 @@ class CommandProcessor:
             # 2. 语音识别 (ASR)
             text = self._transcribe_audio(audio_data)
             if not text:
+                # 添加语音识别失败的反馈
+                self._simple_tts_feedback("抱歉，我没有听清楚，请再说一次")
                 return
 
-            logger.info(f"📝 Recognized text: {text}")
+            # 播放处理中提示音
+            self._play_processing_prompt()
 
             # 3. 理解意图并规划任务（使用 PlannerAgent）
             execution_plan = self._understand_and_plan(text)
@@ -149,14 +174,14 @@ class CommandProcessor:
             # 4. 执行任务计划（使用 TaskOrchestrator）
             execution_result = self._execute_plan(execution_plan)
 
-            # 5. 总结结果（新增）
+            # 5. 总结结果
             final_summary = self._generate_final_summary(
                 original_query=text,
                 execution_plan=execution_plan,
                 execution_result=execution_result
             )
 
-            # 6. 语音输出（更新）
+            # 6. 语音输出
             self._text_to_speech(final_summary)
 
         except Exception as e:
@@ -228,6 +253,56 @@ class CommandProcessor:
             return text
 
         return ""
+
+    def _play_wake_confirmation(self):
+        """播放唤醒确认语音"""
+        import random
+
+        # 随机选择一条提示语
+        prompt = random.choice(self.voice_prompts["wake"])
+
+        logger.info(f"🔔 Wake confirmation: {prompt}")
+
+        try:
+            if self.tts_client:
+                self.tts_client.speak(prompt)
+            else:
+                logger.info(f"💬 {prompt}")
+        except Exception as e:
+            logger.error(f"❌ Wake confirmation TTS failed: {e}")
+
+    def _play_processing_prompt(self):
+        """播放处理中提示语音"""
+        import random
+        prompt = random.choice(self.voice_prompts["processing"])
+
+        logger.info(f"⏳ Processing prompt: {prompt}")
+
+        try:
+            if self.tts_client:
+                self.tts_client.speak(prompt)
+            else:
+                logger.info(f"💬 {prompt}")
+        except Exception as e:
+            logger.error(f"❌ Processing prompt TTS failed: {e}")
+            # 失败不影响主流程，继续执行
+
+    def _play_error_prompt(self):
+        """播放错误提示语音"""
+        import random
+
+        # 随机选择一条提示语
+        prompt = random.choice(self.voice_prompts["error"])
+
+        logger.info(f"❌ Error prompt: {prompt}")
+
+        try:
+            if self.tts_client:
+                self.tts_client.speak(prompt)
+            else:
+                logger.info(f"💬 {prompt}")
+        except Exception as e:
+            logger.error(f"❌ Error prompt TTS failed: {e}")
 
     def _convert_to_simplified(self, text: str) -> str:
         """将繁体中文转换为简体中文"""
@@ -362,14 +437,14 @@ class CommandProcessor:
 
             return {
                 "orchestrator_result": orchestrator_result,
-                "summary": None  # 稍后生成
+                "summary": None
             }
 
         except Exception as e:
             logger.error(f"❌ Orchestrator execution failed: {e}", exc_info=True)
             return {
                 "orchestrator_result": None,
-                "summary": f"执行过程中出现错误：{str(e)}"
+                "summary": "任务执行过程中出现错误，请稍后重试。"
             }
 
     def _handle_infeasible_plan(self, feasibility: str, reason: str) -> str:
@@ -391,7 +466,6 @@ class CommandProcessor:
                 "task_id": task.task_id,
                 "description": task.description,
                 "assigned_agent": task.assigned_agent,
-                "parameters": task.parameters,
                 "expected_result": task.metadata.get("expected_result"),
                 "step_number": task.metadata.get("step_number")
             })

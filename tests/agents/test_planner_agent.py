@@ -110,8 +110,6 @@ def test_text_to_plan_flow():
                 logger.info(f"\n📋 执行步骤:")
                 for idx, task in enumerate(execution_plan.tasks, 1):
                     logger.info(f"  {idx}. [{task.assigned_agent}] {task.description}")
-                    if task.parameters:
-                        logger.info(f"     参数: {task.parameters}")
             else:
                 logger.info(f"  (无执行步骤)")
 

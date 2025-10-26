@@ -159,7 +159,6 @@ class ToolRegistry:
             tool_info.append({
                 "name": tool.name,
                 "description": tool.description,
-                "parameters": str(tool.args_schema.schema() if tool.args_schema else {})
             })
         return tool_info
 
