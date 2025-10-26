@@ -315,6 +315,7 @@ class AssistantWindow(QMainWindow):
         self.worker.moveToThread(self.worker_thread)
 
         self.worker_thread.started.connect(self.worker.run)
+        self.worker.message_received.connect(self.display_assistant_message)
         self.worker.initialization_complete.connect(self.on_initialization_complete)
         self.worker.status_update.connect(self.update_status)
 
@@ -338,6 +339,10 @@ class AssistantWindow(QMainWindow):
     def update_status(self, status: str):
         """Update status label"""
         self.status_label.setText(status)
+
+    def display_assistant_message(self, message: str):
+        """Display message from voice assistant"""
+        self.chat_area.append(f"\n🤖 助手: {message}")
 
     def _on_animation_finished(self):
         """Called when animation finishes"""

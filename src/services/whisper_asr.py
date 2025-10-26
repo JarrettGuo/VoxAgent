@@ -8,13 +8,24 @@
 
 import os
 import subprocess
+import sys
 import tempfile
+from pathlib import Path
 from typing import Dict, Any, Optional
 
 import torch
 from transformers import pipeline
 
 from src.utils.logger import logger
+
+if getattr(sys, 'frozen', False):
+    # Running as compiled exe
+    model_dir = Path(sys.executable).parent / "models"
+else:
+    # Running as Python script
+    model_dir = Path(__file__).parent.parent / "models"
+
+model_dir.mkdir(exist_ok=True)
 
 
 class WhisperASR:
@@ -43,6 +54,9 @@ class WhisperASR:
 
         logger.info(f"Initializing Whisper ASR...")
 
+        # 使用本地缓存目录
+        cache_dir = str(model_dir / "huggingface")
+
         # 初始化 pipeline
         try:
             self.pipe = pipeline(
@@ -50,6 +64,7 @@ class WhisperASR:
                 model=model_name,
                 chunk_length_s=chunk_length_s,
                 device=self.device,
+                model_kwargs={"cache_dir": cache_dir},
             )
             logger.info("Whisper ASR initialized successfully")
 

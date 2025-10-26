@@ -5,8 +5,9 @@
 @Author : guojarrett@gmail.com
 @File   : wake_word_detector.py
 """
-
+import os
 import struct
+import sys
 import time
 from typing import Optional, Callable
 
@@ -14,7 +15,14 @@ import pvporcupine
 import pyaudio
 
 from src.utils.logger import logger
-
+if getattr(sys, 'frozen', False):
+    # Running as exe - Porcupine files are in _MEIPASS temp folder
+    porcupine_lib_path = os.path.join(sys._MEIPASS, 'pvporcupine', 'lib')
+    porcupine_resources_path = os.path.join(sys._MEIPASS, 'pvporcupine', 'resources')
+else:
+    # Running as script
+    porcupine_lib_path = None  # Will use default
+    porcupine_resources_path = None
 
 class WakeWordDetector:
     """唤醒词检测器，监听特定的唤醒词并触发回调"""
@@ -37,7 +45,10 @@ class WakeWordDetector:
             self.porcupine = pvporcupine.create(
                 access_key=access_key,
                 keywords=keywords,
-                sensitivities=sensitivities or [0.5] * len(keywords)
+                sensitivities=sensitivities or [0.5] * len(keywords),
+                library_path=porcupine_lib_path if getattr(sys, 'frozen', False) else None,
+                model_path=os.path.join(porcupine_resources_path, 'porcupine_params.pv') if getattr(sys, 'frozen',
+                                                                                                    False) else None,
             )
             logger.info(f"Wake Word: {', '.join(keywords)}")
         except Exception as e:

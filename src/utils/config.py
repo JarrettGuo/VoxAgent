@@ -7,6 +7,7 @@
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Any, Optional
 
@@ -19,9 +20,18 @@ class Config:
 
     def __init__(self, config_path: Optional[str] = None):
         # 加载 .env 文件
+        if getattr(sys, 'frozen', False):
+            # 运行编译后的 exe
+            project_root = Path(sys.executable).parent
+        else:
+            # 运行 Python 脚本
+            project_root = Path(__file__).parent.parent.parent
         project_root = Path(__file__).parent.parent.parent
         env_path = project_root / ".env"
-        load_dotenv(dotenv_path=env_path, override=True)
+        if env_path.exists():
+            load_dotenv(dotenv_path=env_path, override=True)
+        else:
+            print(f"Warning: .env file not found at {env_path}")
 
         # 加载 config.yaml (仅用于非敏感配置)
         if config_path is None:
