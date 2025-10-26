@@ -9,6 +9,8 @@
 import time
 from typing import TYPE_CHECKING, Dict, Any, Optional, List, Callable
 
+from scripts.regsetup import description
+
 from src.core.agent.agents.base_agent import BaseAgent
 from src.core.agent.agents.error_analyzer_agent import ErrorAnalyzerAgent
 from src.core.agent.agents.planner_agent import PlannerAgent
@@ -47,6 +49,7 @@ class CommandProcessor:
         self.tts_client = None
 
         self._initialized = False
+        self.callback = None
 
         # 模块实例
         self.audio_handler = AudioHandler(assistant, self.config)
@@ -146,6 +149,10 @@ class CommandProcessor:
             return False
 
     def process_command(self, callback: Optional[Callable] = None):
+        if callback is None:
+            return
+        if self.callback is None:
+            self.callback = callback
         """处理语音指令的主流程"""
         # 系统初始化检查
         if not self._initialized:
@@ -192,7 +199,7 @@ class CommandProcessor:
                     self.conversation_manager.state["empty_audio_retries"] = retry_count + 1
                     self._simple_tts_feedback("没有听到声音，请再说一次")
                     time.sleep(0.5)
-                    return self.process_command(callback)  # 递归重试
+                    return self.process_command(self.callback)  # 递归重试
                 return
 
             # 成功录音，清空重试计数
@@ -215,11 +222,11 @@ class CommandProcessor:
                     self.conversation_manager.state["empty_text_retries"] = retry_count + 1
                     self._simple_tts_feedback("没有听清楚，请再说一次")
                     time.sleep(0.5)
-                    return self.process_command(callback)
+                    return self.process_command(self.callback)
                 return
 
-            if callback is not None:
-                callback(f"当前输入: {text}")
+            if self.callback is not None:
+                self.callback(f"当前输入: {text}")
 
             logger.info(f"Recognized text: {text}")
 
@@ -256,7 +263,7 @@ class CommandProcessor:
                     # 继续对话
                     logger.info("Conversation active, continuing to listen...")
                     time.sleep(0.5)
-                    self.process_command(callback)
+                    self.process_command(self.callback)
             else:
                 # 对话结束，恢复唤醒词检测
                 time.sleep(0.3)
@@ -383,6 +390,7 @@ class CommandProcessor:
 
         execution_result = self._execute_plan(execution_plan)
 
+
         if self._is_execution_successful(execution_result):
             self._finish_execution(latest_input, execution_plan, execution_result)
         else:
@@ -413,6 +421,11 @@ class CommandProcessor:
                 user_query=text,
                 conversation_history=conversation_history
             )
+
+            if self.callback is not None:
+                steps = [each.description for each in execution_plan.tasks]
+                plan = "\n".join(steps)
+                self.callback(f"当前计划:\n{plan}")
 
             feasibility = execution_plan.metadata.get("feasibility", "unknown")
             logger.info(
@@ -497,6 +510,8 @@ class CommandProcessor:
             )
 
             logger.info(f"Summary generated: {summary[:100]}...")
+            if self.callback is not None:
+                self.callback(f"结果:\n{summary[:100]}")
             return summary
 
         except Exception as e:
