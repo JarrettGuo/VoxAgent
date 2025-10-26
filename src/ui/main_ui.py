@@ -1,6 +1,7 @@
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget,
-                               QVBoxLayout, QLabel, QPushButton, QTextEdit, QMenu)
-from PySide6.QtCore import Qt, QPointF, QThread, QPropertyAnimation, QTimer, QEasingCurve, Property, QRectF
+                               QVBoxLayout, QLabel, QPushButton, QTextEdit, QMenu, QGraphicsOpacityEffect)
+from PySide6.QtCore import Qt, QPointF, QThread, QPropertyAnimation, QTimer, QEasingCurve, Property, QRectF, QSize, \
+    QParallelAnimationGroup, QPoint
 from PySide6.QtGui import QPainter, QColor, QAction, QRadialGradient, QBrush, QPen, QLinearGradient
 from src.ui.assistant_worker import VoiceAssistantWorker
 
@@ -207,17 +208,54 @@ class FloatingIcon(QWidget):
 class AssistantWindow(QMainWindow):
     def __init__(self, voice_assistant, w, h):
         super().__init__()
-        self.setWindowTitle("桌面助手")
-        self.resize(400, 500)
-
-        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
-        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-
         self.voice_assistant = voice_assistant
         self.worker = None
         self.worker_thread = None
 
+        self.setWindowTitle("桌面助手")
+
+        # Store original size
+        self.normal_size = QSize(400, 500)
+        self.resize(self.normal_size)
+
+        # Make window frameless with transparency for modern look
+        self.setWindowFlags(Qt.WindowType.FramelessWindowHint | Qt.WindowType.WindowStaysOnTopHint)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+
         self._setup_ui()
+
+        # Setup opacity effect for fade animation
+        self.opacity_effect = QGraphicsOpacityEffect(self)
+        self.centralWidget().setGraphicsEffect(self.opacity_effect)
+
+        # Animation group for combined animations
+        self.animation_group = QParallelAnimationGroup(self)
+
+        # Position animation
+        self.pos_animation = QPropertyAnimation(self, b"pos")
+        self.pos_animation.setDuration(300)
+        self.pos_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        # Size animation
+        self.size_animation = QPropertyAnimation(self, b"size")
+        self.size_animation.setDuration(300)
+        self.size_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        # Opacity animation
+        self.opacity_animation = QPropertyAnimation(self.opacity_effect, b"opacity")
+        self.opacity_animation.setDuration(300)
+        self.opacity_animation.setEasingCurve(QEasingCurve.Type.OutCubic)
+
+        # Add animations to group
+        self.animation_group.addAnimation(self.pos_animation)
+        self.animation_group.addAnimation(self.size_animation)
+        self.animation_group.addAnimation(self.opacity_animation)
+
+        # Connect finished signal - will be connected/disconnected as needed
+        self.animation_group.finished.connect(self._on_animation_finished)
+
+        # Track if we're closing
+        self._is_closing = False
 
         self.floating_icon = FloatingIcon(self)
         self.floating_icon.move(w - 100, h - 200)
@@ -301,14 +339,19 @@ class AssistantWindow(QMainWindow):
         """Update status label"""
         self.status_label.setText(status)
 
+    def _on_animation_finished(self):
+        """Called when animation finishes"""
+        if self._is_closing:
+            self.hide()
+            self._is_closing = False
 
-    def update_position(self):
-        """Position the main window to the left of the floating icon"""
+    def calculate_target_position(self):
+        """Calculate where the window should be positioned relative to icon"""
         icon_pos = self.floating_icon.pos()
         margin = 10
 
-        new_x = icon_pos.x() - self.width() - margin
-        new_y = icon_pos.y() - self.height() + (self.floating_icon.height() // 2)
+        new_x = icon_pos.x() - self.normal_size.width() - margin
+        new_y = icon_pos.y() - self.normal_size.height() + (self.floating_icon.height() // 2)
 
         screen_geometry = QApplication.primaryScreen().geometry()
 
@@ -317,28 +360,100 @@ class AssistantWindow(QMainWindow):
         if new_y < 0:
             new_y = 20
         if new_y + self.height() > screen_geometry.height():
-            new_y = screen_geometry.height() - self.height() - 20
+            new_y = screen_geometry.height() - self.normal_size.height() - 20
 
-        self.move(new_x, new_y)
+        return QPoint(new_x, new_y)
+
+    def update_position(self):
+        """Update window position instantly (for when dragging icon)"""
+        if self.isVisible() and not self.animation_group.state() == QParallelAnimationGroup.State.Running:
+            target_pos = self.calculate_target_position()
+            self.move(target_pos)
 
     def toggle_window(self):
         if self.isVisible():
-            self.hide()
+            self.animate_close()
         else:
-            self.update_position()
-            self.show()
-            self.activateWindow()
-            self.raise_()
+            self.animate_open()
 
-    def exit_application(self):
-        """Properly exit the application"""
-        self.chat_area.append("\n👋 关闭...")
+    def animate_open(self):
+        """Animate window opening: expand from icon position"""
+        # Stop any running animations
+        if self.animation_group.state() == QParallelAnimationGroup.State.Running:
+            self.animation_group.stop()
 
-        if self.worker:
-            self.worker.stop()
+        self._is_closing = False
 
-        if self.worker_thread:
-            self.worker_thread.quit()
-            self.worker_thread.wait(3000)
+        # Calculate icon center position
+        icon_pos = self.floating_icon.pos()
+        icon_center = QPoint(
+            icon_pos.x() + self.floating_icon.width() // 2,
+            icon_pos.y() + self.floating_icon.height() // 2
+        )
 
-        QApplication.quit()
+        # Start from icon center with zero size
+        start_pos = QPoint(
+            icon_center.x() - 1,
+            icon_center.y() - 1
+        )
+        start_size = QSize(2, 2)
+
+        # Calculate target position and size
+        target_pos = self.calculate_target_position()
+        target_size = self.normal_size
+
+        # Set starting state
+        self.resize(start_size)
+        self.move(start_pos)
+        self.opacity_effect.setOpacity(0.0)
+        self.show()
+
+        # Configure animations
+        self.pos_animation.setStartValue(start_pos)
+        self.pos_animation.setEndValue(target_pos)
+
+        self.size_animation.setStartValue(start_size)
+        self.size_animation.setEndValue(target_size)
+
+        self.opacity_animation.setStartValue(0.0)
+        self.opacity_animation.setEndValue(1.0)
+
+        # Start animation
+        self.animation_group.start()
+        self.activateWindow()
+        self.raise_()
+
+    def animate_close(self):
+        """Animate window closing: shrink to icon position"""
+        # Stop any running animations
+        if self.animation_group.state() == QParallelAnimationGroup.State.Running:
+            self.animation_group.stop()
+
+        self._is_closing = True
+
+        # Calculate icon center position
+        icon_pos = self.floating_icon.pos()
+        icon_center = QPoint(
+            icon_pos.x() + self.floating_icon.width() // 2,
+            icon_pos.y() + self.floating_icon.height() // 2
+        )
+
+        # Target: shrink to icon center
+        target_pos = QPoint(
+            icon_center.x() - 1,
+            icon_center.y() - 1
+        )
+        target_size = QSize(2, 2)
+
+        # Configure animations
+        self.pos_animation.setStartValue(self.pos())
+        self.pos_animation.setEndValue(target_pos)
+
+        self.size_animation.setStartValue(self.size())
+        self.size_animation.setEndValue(target_size)
+
+        self.opacity_animation.setStartValue(1.0)
+        self.opacity_animation.setEndValue(0.0)
+
+        # Start animation
+        self.animation_group.start()
